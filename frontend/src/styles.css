@@ -1,0 +1,61 @@
+:root { --bg:#000; --panel:#101010; --line:#2a2a22; --neon:#FFE600; --text:#f4f4ee; --muted:#8d8d80; --green:#2ecc71; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:400 16px/1.5 Figtree, system-ui, sans-serif; }
+h1, h2, h3 { font-family:"Bricolage Grotesque", Figtree, sans-serif; margin:0 0 .5rem; }
+h1 { font-size:2rem; font-weight:800; letter-spacing:-.02em; }
+h1 span { color:var(--neon); text-shadow:0 0 18px rgba(255,230,0,.55); }
+h2 { font-size:1.4rem; font-weight:500; }
+.shell { max-width:1080px; margin:0 auto; padding:1.5rem 1.25rem 4rem; }
+header { display:flex; flex-wrap:wrap; gap:1rem; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding-bottom:1rem; margin-bottom:2rem; }
+.brand-group { display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; }
+.status-pill-group { display:flex; gap:0.5rem; flex-wrap:wrap; }
+.badge { display:inline-flex; align-items:center; gap:0.35rem; font-size:0.75rem; padding:0.25rem 0.65rem; border-radius:999px; background:#141412; border:1px solid var(--line); color:var(--muted); font-weight:500; }
+.badge.ok { border-color:rgba(46,204,113,.4); color:#4ade80; }
+.badge.ai { border-color:rgba(255,230,0,.4); color:var(--neon); }
+.badge.err { border-color:rgba(231,76,60,.4); color:#f87171; }
+nav { display:flex; gap:.4rem; flex-wrap:wrap; }
+.tab, .chip { background:none; border:1px solid var(--line); color:var(--text); padding:.5rem 1rem; border-radius:999px; cursor:pointer; font:inherit; transition:border-color .15s, background .15s; }
+.tab:hover, .chip:hover { border-color:var(--neon); }
+.tab.on, .chip.on { background:var(--neon); color:#000; border-color:var(--neon); font-weight:600; }
+.chip.letter { min-width:40px; text-align:center; font-weight:700; padding:0.4rem 0.6rem; }
+.btn { background:var(--neon); color:#000; border:0; padding:.7rem 1.4rem; border-radius:8px; font:600 1rem Figtree, sans-serif; cursor:pointer; box-shadow:0 0 22px rgba(255,230,0,.35); transition:transform .1s; }
+.btn:hover:not(:disabled) { transform:translateY(-1px); }
+.btn:disabled { opacity:.4; box-shadow:none; cursor:not-allowed; }
+.btn.secondary { background:#1e1e1a; color:var(--text); border:1px solid var(--line); box-shadow:none; }
+.btn.secondary:hover { border-color:var(--neon); color:var(--neon); }
+:focus-visible { outline:2px solid var(--neon); outline-offset:2px; }
+input { width:100%; background:var(--panel); border:1px solid var(--line); color:var(--text); padding:.7rem .9rem; border-radius:8px; font:inherit; margin-bottom:1rem; }
+input:focus { border-color:var(--neon); outline:none; }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:2.5rem; }
+@media (max-width:760px) { .two { grid-template-columns:1fr; } }
+.muted { color:var(--muted); } .error { color:#ff6b6b; } .note { color:var(--neon); }
+.cam { display:flex; flex-direction:column; gap:1rem; align-items:flex-start; margin-top:1rem; }
+.frame { position:relative; width:100%; max-width:480px; aspect-ratio:4/3; background:var(--panel); border:2px solid var(--line); border-radius:12px; overflow:hidden; }
+.frame.live { border-color:var(--neon); box-shadow:0 0 28px rgba(255,230,0,.4); }
+.frame video, .frame canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+.overlay { position:absolute; inset:0; margin:0; display:grid; place-items:center; padding:1rem; text-align:center; color:var(--muted); }
+.inline { display:flex; gap:.75rem; } .inline input { margin:0; }
+.row { display:grid; grid-template-columns:minmax(80px,1fr) 2fr 56px; gap:.75rem; align-items:center; margin:.6rem 0; }
+.best { color:var(--neon); font-weight:600; font-size:1.1rem; }
+.bar { height:10px; background:var(--panel); border-radius:5px; overflow:hidden; }
+.bar i { display:block; height:100%; background:var(--neon); box-shadow:0 0 10px var(--neon); }
+.row b { text-align:right; }
+.skeleton { background:var(--panel); border:1px solid var(--line); border-radius:12px; max-width:100%; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:1.25rem; margin:1.5rem 0; }
+figure { margin:0; } figcaption { margin-top:.4rem; font-weight:600; color:var(--neon); display:flex; align-items:center; gap:0.5rem; }
+.tag-spell { font-size:0.68rem; font-weight:600; background:#222; border:1px solid #444; color:#bbb; padding:0.1rem 0.4rem; border-radius:4px; text-transform:uppercase; }
+.list { display:flex; flex-wrap:wrap; gap:.4rem; max-height:360px; overflow:auto; padding-bottom:0.5rem; }
+.score { margin-top:1rem; padding:1.2rem 1.4rem; border:1px solid var(--neon); border-radius:12px; box-shadow:0 0 24px rgba(255,230,0,.2); }
+.score strong { font:800 3rem "Bricolage Grotesque", sans-serif; color:var(--neon); } .score p { margin:0.3rem 0 0; }
+.subnav { display:flex; gap:0.5rem; margin-bottom:1rem; border-bottom:1px solid var(--line); padding-bottom:0.6rem; }
+.subnav button { background:none; border:0; color:var(--muted); font:600 0.9rem Figtree, sans-serif; cursor:pointer; padding:0.3rem 0.6rem; border-radius:4px; }
+.subnav button.on { color:var(--neon); background:#1c1c14; }
+.dropzone { border:2px dashed var(--line); border-radius:12px; padding:2rem 1.5rem; text-align:center; cursor:pointer; background:var(--panel); transition:border-color .2s; margin-top:1rem; }
+.dropzone:hover { border-color:var(--neon); }
+.speak-btn { background:#1b1b14; border:1px solid var(--neon); color:var(--neon); padding:0.35rem 0.75rem; border-radius:6px; cursor:pointer; font:600 0.85rem Figtree, sans-serif; display:inline-flex; align-items:center; gap:0.3rem; margin-left:auto; }
+.speak-btn:hover { background:var(--neon); color:#000; }
+.streak-box { display:flex; gap:1.5rem; align-items:center; margin-bottom:1rem; background:var(--panel); padding:0.75rem 1rem; border-radius:8px; border:1px solid var(--line); }
+.streak-item { display:flex; flex-direction:column; }
+.streak-item small { color:var(--muted); font-size:0.75rem; }
+.streak-item strong { color:var(--neon); font-size:1.15rem; }
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; } }

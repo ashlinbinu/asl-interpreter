@@ -1,0 +1,11 @@
+fastapi==0.115.*
+uvicorn[standard]==0.30.*
+sqlalchemy==2.0.*
+psycopg2-binary==2.9.*
+numpy
+python-dotenv
+mediapipe==0.10.14
+opencv-python
+scikit-learn
+joblib
+Pillow
