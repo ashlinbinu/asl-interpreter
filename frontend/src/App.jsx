@@ -38,17 +38,27 @@ function ModelBadge({ m, name }) {
 export default function App() {
   const [nav, setNav] = useState({ tab: "recognize", signId: null });
   const [status, setStatus] = useState(null);
+  // Bumped whenever the backend becomes reachable, so pages mount (or remount) only when their requests can succeed.
+  const [epoch, setEpoch] = useState(0);
   const [me, setMe] = useState(learner());
   const Page = TABS.find((t) => t[0] === nav.tab)[2];
   const go = (tab, signId = null, extra = {}) => setNav({ tab, signId, ...extra });
+  const up = !!status?.database?.connected;
 
   useEffect(() => {
-    const fetchStatus = () => api.status().then(setStatus).catch(() => setStatus({ ok: false }));
-    fetchStatus();
-    const timer = setInterval(fetchStatus, 15000);
+    let alive = true, timer, wasUp = false;
+    const poll = () => api.status().catch(() => ({ ok: false })).then((s) => {
+      if (!alive) return;
+      const nowUp = !!s?.database?.connected;
+      if (nowUp && !wasUp) setEpoch((e) => e + 1);
+      wasUp = nowUp;
+      setStatus(s);
+      timer = setTimeout(poll, nowUp ? 15000 : 2000);
+    });
+    poll();
     const onMe = (e) => setMe(e.detail);
     window.addEventListener("handspeak:learner", onMe);
-    return () => { clearInterval(timer); window.removeEventListener("handspeak:learner", onMe); };
+    return () => { alive = false; clearTimeout(timer); window.removeEventListener("handspeak:learner", onMe); };
   }, []);
 
   useEffect(() => { document.documentElement.dataset.contrast = me.highContrast ? "high" : ""; }, [me.highContrast]);
@@ -60,9 +70,9 @@ export default function App() {
         <div className="brand-group">
           <h1>Hand<span>speak</span></h1>
           <div className="status-pill-group">
-            {status?.database?.connected
+            {up
               ? <span className="badge ok">● {status.database.signs_count} signs</span>
-              : <span className="badge err">○ Backend unavailable</span>}
+              : <span className="badge err">{status ? "○ Backend unavailable" : "○ Connecting…"}</span>}
             {status?.models && <ModelBadge m={status.models.alphabet} name="Alphabet" />}
             {status?.models && <ModelBadge m={status.models.words} name="Words" />}
           </div>
@@ -81,8 +91,19 @@ export default function App() {
         </div>
       </header>
       <main id="main">
-        <Page go={go} initialSignId={nav.signId} initialSentence={nav.sentence}
-              key={nav.tab + (nav.signId ?? "") + (nav.sentence ?? "")} />
+        {epoch > 0 && !up && <p className="banner" role="alert">Lost the connection to the backend: retrying…</p>}
+        {epoch === 0 ? (
+          <section className="card" role="status">
+            <h2>{status ? "Waiting for the backend…" : "Connecting…"}</h2>
+            <p>Retrying every 2 seconds; the app opens by itself when the backend answers.</p>
+            <p className="muted small">Start it with <code>run_all.bat</code>, or in the <code>backend</code> folder
+              run <code>python -m uvicorn app.main:app</code>. It is ready when its window says
+              "Application startup complete".</p>
+          </section>
+        ) : (
+          <Page go={go} initialSignId={nav.signId} initialSentence={nav.sentence}
+                key={`${epoch}|${nav.tab}|${nav.signId ?? ""}|${nav.sentence ?? ""}`} />
+        )}
       </main>
       <footer className="muted small">
         Handspeak is a learning aid, not a certified ASL translator. Scores are estimates; facial grammar and other

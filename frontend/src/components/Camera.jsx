@@ -76,6 +76,7 @@ const Camera = forwardRef(function Camera(
   const [warnings, setWarnings] = useState([]);
   const [recording, setRecording] = useState(false);
   const [fps, setFps] = useState(0);
+  const [tracker, setTracker] = useState("");
   const [autoState, setAutoState] = useState("idle");
 
   useEffect(() => { seg.current = new Segmenter(kind); }, [kind, mode]);
@@ -135,6 +136,7 @@ const Camera = forwardRef(function Camera(
         ]);
         if (stopped) return s.getTracks().forEach((t) => t.stop());
         streamRef.current = s;
+        setTracker(tr.delegate);
         video.current.srcObject = s;
         await video.current.play();
         setStatus("");
@@ -208,7 +210,7 @@ const Camera = forwardRef(function Camera(
         <video ref={video} playsInline muted aria-label="Your camera (mirrored)" />
         <canvas ref={canvas} aria-hidden="true" />
         {status && <p className="overlay">{status}</p>}
-        {!status && <span className="fps" aria-hidden="true">{fps.toFixed(0)} fps</span>}
+        {!status && <span className="fps" aria-hidden="true">{fps.toFixed(0)} fps · {tracker}</span>}
       </div>
       {warnings.length > 0 && !status && (
         <ul className="warnings" role="status">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>

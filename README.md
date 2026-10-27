@@ -202,7 +202,14 @@ frontend/src/
 - **"Words model: not trained" badge:** run `python -m scripts.train_words`, then restart the API.
 - **"Alphabet model: not trained" badge:** record or ingest data, then run `python -m scripts.train_alphabet`.
 - **Location feedback missing:** keep your face and shoulders in view; the camera warns when they aren't visible.
-- **Camera unavailable:** grant permission, use `localhost`, close other apps using the camera.
+- **Camera unavailable:** grant permission, use `127.0.0.1` or `localhost`, close other apps using the camera.
+- **"Waiting for the backend…" / "Backend unavailable":** the page retries every 2 s and loads by itself once the
+  backend answers. If it never does, read the "ASL Backend" window. If you clicked inside a server window, Windows
+  pauses that program while text is selected: press Esc in it.
+- **Low frame rate:** the camera badge shows FPS and the tracker (`GPU` or `CPU`). On this laptop (Ryzen 5 5500U,
+  Radeon graphics) Chrome measured ~25 fps with a real signer video before pose was thinned to every second frame,
+  ~37 after (camera-limited at 30 with a webcam). Close other heavy tabs and programs; `CPU` means the GPU couldn't
+  be used.
 - **`GET /` is 404:** expected; use `/docs`, `/api/status` or the frontend.
 
 ## Licenses and attribution
