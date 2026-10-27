@@ -7,6 +7,7 @@ full download by accident. `max_bytes` caps the total transfer.
     with zipfile.ZipFile(HttpRangeFile(url, max_bytes=64 << 20)) as zf:
         data = zf.read("ASL_Citizen/splits/train.csv")
 """
+import http.client
 import io
 import time
 import urllib.error
@@ -71,7 +72,7 @@ class HttpRangeFile(io.RawIOBase):
             except urllib.error.HTTPError as e:
                 if 400 <= e.code < 500 or attempt == self.retries:
                     raise
-            except OSError:
+            except (OSError, http.client.HTTPException):  # timeouts, resets, IncompleteRead (not an OSError)
                 if attempt == self.retries:
                     raise
             time.sleep(min(2 ** attempt, 30))

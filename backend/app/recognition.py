@@ -71,7 +71,9 @@ class StaticModel:
         return {"ready": True, "version": self.version, "type": self.kind, "classes": len(self.classes),
                 "eval_protocol": m.get("eval_protocol"), "accuracy": m.get("test", {}).get("accuracy"),
                 "macro_f1": m.get("test", {}).get("macro_f1"), "test_signers": m.get("signers", {}).get("test"),
-                "trained_at": m.get("created_at"), "warning": m.get("warning")}
+                "trained_at": m.get("created_at"), "warning": m.get("warning"),
+                "verified": bool(m.get("verified")), "video_signers": len(m.get("video_signers") or []),
+                "loso_mean": (m.get("leave_one_signer_out") or {}).get("mean")}
 
 
 class Models:

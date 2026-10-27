@@ -6,6 +6,8 @@ Layouts accepted:
 
 Each image -> MediaPipe Hand(+Pose) landmarks -> one NPZ + reference_clips row. Images without a detected hand
 are discarded, and the per-class detection rate is printed and saved to <store>/reports/.
+Photo clips are marked supplementary: training only, never validation/test (docs/PLAN.md §7.4).
+J and Z are skipped (motion letters: a photo can't show them).
 
     python -m scripts.datasets.ingest_alphabet_images --root D:\\data\\asl_alphabet_train --source kaggle_asl_alphabet ^
         --signer-id kaggle_akash --license "see Kaggle dataset page" --per-class 600
@@ -24,6 +26,7 @@ import cv2  # noqa: E402
 from scripts.datasets.common import add_clip, existing_keys, find_sign, setup  # noqa: E402
 
 from app.config import get_settings  # noqa: E402
+from app.content import DYNAMIC_LETTERS  # noqa: E402
 from app.db import Session  # noqa: E402
 from app.extract import Extractor  # noqa: E402
 
@@ -66,6 +69,8 @@ def main():
     with Extractor(mode="image") as ex, Session() as s:
         for signer, dirs in groups.items():
             for letter in sorted(dirs):
+                if letter in DYNAMIC_LETTERS:
+                    continue
                 files = sorted(p for p in dirs[letter].rglob("*") if p.suffix.lower() in EXTS)
                 rng.shuffle(files)
                 files = files[:a.per_class]
@@ -85,7 +90,8 @@ def main():
                     if not frame["hands"]:
                         continue
                     add_clip(s, sign, [frame], source=a.source, signer_id=signer, rel_path=rel, license=a.license,
-                             attribution=a.attribution, source_url=a.source_url)
+                             attribution=a.attribution, source_url=a.source_url,
+                             extra_quality={"supplementary": True})
                     ok += 1
                     if ok % 200 == 0:
                         s.commit()

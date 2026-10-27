@@ -55,13 +55,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--signer-id", required=True)
     ap.add_argument("--signs", nargs="*", default=[])
-    ap.add_argument("--alphabet", action="store_true", help="record the 24 static letters (J/Z excluded)")
+    ap.add_argument("--alphabet", action="store_true", help="record A-Z (J and Z as 3 s motion takes)")
     ap.add_argument("--reps", type=int, default=5)
     ap.add_argument("--seconds", type=float, default=None, help="default 1.5 s for letters, 3 s for words")
     ap.add_argument("--camera", type=int, default=0)
     ap.add_argument("--left-handed", action="store_true")
     a = ap.parse_args()
-    labels = list(a.signs) + ([c for c in "ABCDEFGHIKLMNOPQRSTUVWXY"] if a.alphabet else [])
+    labels = list(a.signs) + ([chr(c) for c in range(ord("A"), ord("Z") + 1)] if a.alphabet else [])
     if not labels:
         ap.error("give --signs or --alphabet")
     setup()
@@ -79,7 +79,7 @@ def main():
                 print(f"skip '{label}': not in the vocabulary")
                 continue
             is_letter = sign.category == "alphabet"
-            secs = a.seconds or (1.5 if is_letter else 3.0)
+            secs = a.seconds or (1.5 if is_letter and sign.kind == "static" else 3.0)
             rep = 0
             while rep < a.reps:
                 t_end = time.monotonic() + 3

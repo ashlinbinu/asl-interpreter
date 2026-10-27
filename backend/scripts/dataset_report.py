@@ -91,6 +91,7 @@ def main():
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(c, indent=2), encoding="utf-8")
     md = to_markdown(c)
+    sys.stdout.reconfigure(errors="replace")  # Windows consoles (cp1252) can't print every character
     print(md)
     if a.write_docs:
         write_docs(md, REPO_ROOT / "docs" / "DATASET.md")

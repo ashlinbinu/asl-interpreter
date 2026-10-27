@@ -38,6 +38,7 @@ def load_clips(sources=None, min_hand_rate=0.5):
         frames, meta = load_clip(path)
         clips.append({"frames": frames, "label": sign.label, "signer_id": f"{clip.source}:{clip.signer_id}",
                       "clip_id": clip.id, "source": clip.source,
+                      "supplementary": bool((clip.quality or {}).get("supplementary")),
                       "left_handed": bool((clip.quality or {}).get("left_handed") or meta.get("left_handed"))})
     return clips
 
@@ -67,6 +68,13 @@ def main():
           f"ECE {t['ece']:.3f}  (n={t['n']})")
     for c in t["top_confusions"][:8]:
         print(f"  {c['true']} -> {c['pred']}: {c['rate']:.0%} ({c['count']})")
+    cv = metrics.get("leave_one_signer_out")
+    if cv:
+        print(f"Leave-one-signer-out ({cv['model']}): mean {cv['mean']:.3f}, range {cv['min']:.3f}-{cv['max']:.3f}")
+    if metrics.get("ablation"):
+        print("Without supplementary photos:", metrics["ablation"]["without_supplementary"])
+    if not metrics["verified"]:
+        print(f"UNVERIFIED: needs >= 3 held-out video signers (has {len(metrics['video_signers'])}).")
     if metrics.get("warning"):
         print("WARNING:", metrics["warning"])
     print(f"Saved {out}")

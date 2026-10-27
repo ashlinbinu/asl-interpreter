@@ -29,6 +29,39 @@ def test_single_signer_is_flagged():
     assert info["protocol"] == "single_signer_block_split" and "NOT" in warning
 
 
+def _photos(signer="kaggle_1"):
+    clips = synthetic_letter_clips(signers=(signer,), reps=3, seed=5)
+    for c in clips:
+        c["source"], c["clip_id"] = "kaggle_asl_alphabet", "k-" + c["clip_id"]
+    return clips
+
+
+def test_supplementary_photos_are_train_only():
+    clips = synthetic_letter_clips(signers=("a", "b", "c")) + _photos()
+    assign, info, _ = make_splits(clips)
+    assert all(assign[c["clip_id"]] == "train" for c in clips if c["source"] == "kaggle_asl_alphabet")
+    assert info["protocol"] == "signer_holdout" and "kaggle_1" not in info["test"] + info["val"]
+    assert info["supplementary_signers"] == ["kaggle_1"]
+    with pytest.raises(ValueError, match="training-only"):
+        make_splits(clips, test_signers=["kaggle_1"])
+    with pytest.raises(ValueError, match="supplementary"):
+        make_splits(_photos())
+
+
+def test_verified_needs_three_video_signers(tmp_path, monkeypatch):
+    import app.train_static as ts
+    real = ts.candidates
+    monkeypatch.setattr(ts, "candidates", lambda seed=0: {"rf": real(seed)["rf"]})
+    m3, _ = train(synthetic_letter_clips(), tmp_path / "a", n_aug=0, log=lambda *_: None)
+    assert m3["verified"] and set(m3["leave_one_signer_out"]["folds"]) == {"s1", "s2", "s3"}
+    assert set(m3["test"]["per_signer"]) == {"s3"}
+    m2, out = train(synthetic_letter_clips(signers=("s1", "s2")) + _photos(), tmp_path / "b", n_aug=0,
+                    log=lambda *_: None)
+    assert not m2["verified"] and m2["supplementary_sources"] == ["kaggle_asl_alphabet"]
+    assert m2["ablation"]["without_supplementary"]["n"] > 0
+    assert StaticModel(out).summary()["verified"] is False
+
+
 @pytest.mark.parametrize("kind", ["mlp", "rf"])
 def test_train_writes_versioned_artifacts_and_js_matches(tmp_path, kind, monkeypatch):
     import app.train_static as ts

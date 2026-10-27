@@ -27,6 +27,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Accept-Ranges", "bytes")
         self.end_headers()
+        if srv.truncate and len(body) > 1000:     # simulate a dropped connection mid-body
+            srv.truncate -= 1
+            body = body[:len(body) // 2]
+            self.close_connection = True
         try:
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
@@ -34,9 +38,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
 
 @contextmanager
-def serve(blob: bytes, honor_range=True):
+def serve(blob: bytes, honor_range=True, truncate=0):
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
-    srv.blob, srv.honor_range = blob, honor_range
+    srv.blob, srv.honor_range, srv.truncate = blob, honor_range, truncate
     t = threading.Thread(target=srv.serve_forever, daemon=True)
     t.start()
     try:

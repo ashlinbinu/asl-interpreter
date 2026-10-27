@@ -19,9 +19,11 @@ function ModelBadge({ m }) {
   if (!m?.ready) return <span className="badge" title={m?.error || ""}>Alphabet model: not trained</span>;
   const acc = m.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : "n/a";
   const proto = m.eval_protocol === "signer_holdout" ? "held-out signers" : m.eval_protocol;
+  const why = m.verified ? "" : ` · unverified: needs ≥3 held-out video signers (has ${m.video_signers ?? 0})`;
   return (
-    <span className={`badge ${m.warning ? "warnb" : "ai"}`} title={`${m.version} · ${m.type} · ${proto}${m.warning ? " · " + m.warning : ""}`}>
-      Alphabet: {acc} ({proto})
+    <span className={`badge ${m.verified && !m.warning ? "ai" : "warnb"}`}
+          title={`${m.version} · ${m.type} · ${proto}${why}${m.warning ? " · " + m.warning : ""}`}>
+      Alphabet: {acc} ({m.verified ? proto : "unverified"})
     </span>
   );
 }

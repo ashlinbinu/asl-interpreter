@@ -5,7 +5,10 @@ import { api } from "../api.js";
 import { learner, updateLearner } from "../lib/identity.js";
 
 const SIGNER_KEY = "handspeak.signer";
-const STATIC_LETTERS = "ABCDEFGHIKLMNOPQRSTUVWXY".split("");
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const MOTION_LETTERS = new Set(["J", "Z"]);
+// Static letters are a 1.5 s hold; J, Z and words are 3 s motion takes.
+const isHold = (s) => s?.category === "alphabet" && s.kind === "static";
 
 function check(frames, isLetter) {
   const n = frames.length || 1;
@@ -21,7 +24,7 @@ export default function Record() {
   const cam = useRef();
   const [signer, setSigner] = useState(() => { try { return localStorage.getItem(SIGNER_KEY) || ""; } catch { return ""; } });
   const [vocab, setVocab] = useState([]);
-  const [chosen, setChosen] = useState(STATIC_LETTERS);
+  const [chosen, setChosen] = useState(LETTERS);
   const [reps, setReps] = useState(5);
   const [counts, setCounts] = useState({});
   const [queue, setQueue] = useState([]);
@@ -56,7 +59,7 @@ export default function Record() {
     setPhase("countdown");
     for (let c = 3; c > 0; c--) { setCount(c); await new Promise((r) => setTimeout(r, 700)); }
     setPhase("recording");
-    await cam.current.startTimed(current.sign.category === "alphabet" ? 1.5 : 3);
+    await cam.current.startTimed(isHold(current.sign) ? 1.5 : 3);
   };
 
   const onSegment = ({ frames, video }) => {
@@ -105,11 +108,13 @@ export default function Record() {
             </label>
             <label className="inline-check"><input type="checkbox" checked={leftHanded} onChange={(e) => setLeftHanded(e.target.checked)} /> This signer is left-handed</label>
             <label>Repetitions per sign <input type="number" min={1} max={30} value={reps} onChange={(e) => setReps(+e.target.value || 1)} /></label>
-            <p className="muted small">Letters ({STATIC_LETTERS.length} static; J and Z need the word recorder)</p>
+            <p className="muted small">Letters: hold each static letter still for 1.5 s. J and Z are motion letters
+              (3 s take: draw the whole movement).</p>
             <div className="list">
-              {STATIC_LETTERS.map((L) => (
+              {LETTERS.map((L) => (
                 <button key={L} className={`chip letter ${chosen.includes(L) ? "on" : ""}`} onClick={() => toggle(L)}
-                        aria-pressed={chosen.includes(L)}>{L}<small className="count">{counts[byLabel[L]?.id] || 0}</small></button>
+                        aria-pressed={chosen.includes(L)} title={MOTION_LETTERS.has(L) ? "motion letter" : undefined}>
+                  {L}{MOTION_LETTERS.has(L) && "↻"}<small className="count">{counts[byLabel[L]?.id] || 0}</small></button>
               ))}
             </div>
             {words.length > 0 && (<>
@@ -138,7 +143,7 @@ export default function Record() {
       </div>
 
       <div>
-        <Camera ref={cam} mode="timed" kind={current?.sign.category === "alphabet" ? "static" : "dynamic"}
+        <Camera ref={cam} mode="timed" kind={isHold(current?.sign) ? "static" : "dynamic"}
                 recordVideo onSegment={onSegment} />
         {phase === "prompt" && <button className="btn" onClick={record}>Record (Space)</button>}
         {phase === "countdown" && <p className="countdown" aria-live="assertive">{count}</p>}

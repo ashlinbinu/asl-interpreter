@@ -155,14 +155,10 @@ Pairs: MOTHER/FATHER (chin vs forehead), EAT/HOME (mouth vs mouth→cheek), HAPP
 Resolved: the vocabulary is the 50 words in §4 (subject to the dataset check), `PYTHON/Data` is retired, the
 alphabet comes from video with Kaggle photos as train-only supplement (§7).
 
-1. **ASK-A, ASL Citizen inspection:** OK to read the zip index + split CSVs (~10 MB, no videos)? This uses the
-   dataset, so it means accepting Microsoft's non-commercial research license.
-2. **ASK-B, store location:** `HANDSPEAK_STORE_DIR=D:\handspeak-data` (written to `backend/.env`)?
-3. **ASK-C, ASL Citizen ingest:** after the inspection report, OK to fetch the vocabulary clips (estimate ~1 GB;
-   the report gives the exact figure)?
-4. **ASK-D, ChicagoFSVid:** OK to download the 1.7 GB archive to D:? It states no license, so it stays research-only
-   and local. Its README decides how the letter-peak annotations are read.
-5. **ASK-4, PyTorch:** OK to install CPU PyTorch in the venv for P3 training?
+Answered 2026-10-27: datasets and licenses approved. The store is `D:\handspeak_data` (`backend/.env`).
+
+1. **ASK-E, `h5py`:** OK to `pip install h5py` (~3 MB) to read ChicagoFSVid's MATLAB 7.3 files?
+2. **ASK-4, PyTorch:** OK to install CPU PyTorch in the venv for P3 training?
 
 ---
 
@@ -176,9 +172,8 @@ as dynamic signs. Evaluation is by held-out signer.
 | Source | Letters | Signers | Role |
 |---|---|---|---|
 | Own recordings (Record page saves WebM + landmarks) | A–Z incl. J, Z | each person you record, with consent | train + **primary test** (closest to live use) |
-| ChicagoFSVid isolated letters | per signer (count unknown until the archive is read) | 4 | train / test by signer |
-| ChicagoFSVid letters inside words (21,453 annotated peaks) | all 26, coarticulated | same 4 | **train only** (variety), reported separately |
-| ASL Citizen letter glosses, if the inspection finds any | ≤26 | up to 52 | train / test using the official signer split |
+| ChicagoFSVid (release = 128×128 hand crops with per-frame letter labels, inside words only) | 24 static, coarticulated; J only as a hand-shape/orientation change, Z's path lost | 4 | static train + **cross-signer test of handshape only**, reported separately; needs `h5py` and a MediaPipe detection check on the crops |
+| ASL Citizen | **none** (inspected: 0 letter glosses) | – | – |
 | Kaggle ASL Alphabet photos | 24 static | 1 | **supplementary static train only**, never val/test |
 | ChicagoFSWild(+), FSboard | phrases without letter timing | 160–260 / 147 | not now: would need forced alignment with a trained model |
 
@@ -207,10 +202,15 @@ dynamic model (P3) next to the words. Until then, Practice shows their reference
   and the UI badge say **"unverified"** next to any number.
 - Reported separately: per source, per signer, and own recordings (the live ≥90% gate).
 
-### 7.5 Implementation steps (after ASK-D, or with own recordings alone)
-1. `train_static.py`: `supplementary` flag, video-only validation/test, `verified` in metrics, badge text.
-2. `app/holds.py` + tests on synthetic hold/transition clips.
-3. `scripts/datasets/ingest_chicago_fsvid.py` (format from its README), and `ingest_recordings.py` for own videos
-   through the same hold extraction.
-4. `ingest_alphabet_images.py --supplementary` for Kaggle.
-5. J/Z sequences go into the P3 dynamic dataset.
+### 7.5 Implementation steps
+1. **Done:** `train_static.py` keeps supplementary sources train-only, refuses a photo signer as test signer,
+   adds `verified`, per-signer accuracy, leave-one-signer-out (3–6 video signers) and a without-photos ablation to
+   `metrics.json`. The UI badge says "unverified".
+2. **Done:** `app/holds.py` (centred ±50 ms speeds, so jitter isn't mistaken for motion) + tests. Training now
+   learns static letters only from the middle 60% of each hold in a video clip.
+3. **Done:** Kaggle photos ingested as supplementary (`ingest_alphabet_images` marks every photo clip).
+4. **Blocked on `h5py`:** `ingest_chicago_fsvid.py`. Probe MediaPipe on the 128×128 crops first (tight crops
+   failed before, §1.2-2). If detection is poor, drop the source.
+5. **Needs you:** record at least 3 people (A–Z, 5+ takes each) on the Record page. That is the only source of
+   multi-signer full-frame letter video, and of J/Z motion. With fewer than 3, the badge stays "unverified".
+6. J/Z sequences go into the P3 dynamic dataset.

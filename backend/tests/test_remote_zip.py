@@ -47,6 +47,15 @@ def test_refuses_a_server_that_ignores_ranges():
         HttpRangeFile(url)
 
 
+def test_retries_a_truncated_response(monkeypatch):
+    import app.remote_zip as rz
+    monkeypatch.setattr(rz.time, "sleep", lambda s: None)
+    blob = bytes(range(256)) * 2000
+    with serve(blob, truncate=2) as url:
+        f = HttpRangeFile(url)
+        assert f.read(200_000) == blob[:200_000]
+
+
 def test_transfer_budget_is_enforced():
     with serve(b"y" * 500_000) as url:
         f = HttpRangeFile(url, max_bytes=100_000)

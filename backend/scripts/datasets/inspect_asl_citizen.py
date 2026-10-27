@@ -116,6 +116,7 @@ def main():
     (out / "asl_citizen_inspect.json").write_text(json.dumps(rep, indent=2), encoding="utf-8")
     md = to_markdown(rep)
     (out / "asl_citizen_inspect.md").write_text(md, encoding="utf-8")
+    sys.stdout.reconfigure(errors="replace")  # Windows consoles (cp1252) can't print every character
     print(md)
     print(f"Reports: {out / 'asl_citizen_inspect.md'} and .json")
 
