@@ -8,50 +8,31 @@ export default function Library() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const onCapture = async (data) => {
-    const frames = data.frames || data;
-    setLoading(true);
-    setMsg("");
-    setErr("");
+  const onSegment = async ({ frames }) => {
+    setLoading(true); setMsg(""); setErr("");
     try {
       const s = await api.addSign(label.trim(), frames);
-      setMsg(`Successfully saved custom sign "${s.label}". It is now saved in the database and immediately available in Practice, Recognize, and Text-to-Sign!`);
+      setMsg(`Saved "${s.label}" with your recording as its reference. Find it under Practice → My signs.`);
       setLabel("");
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
   };
 
   return (
     <section>
-      <h2>Add a Custom Sign</h2>
-      <p className="muted">
-        Create and record custom vocabulary or specialized gestures. Once recorded, they are stored
-        directly in the database and loaded into the recognition and translation pipelines.
-      </p>
-
-      <div style={{ maxWidth: "480px" }}>
-        <input
-          value={label}
-          placeholder="Word or phrase (e.g. 'Coffee', 'Welcome', 'My Name')"
-          onChange={(e) => setLabel(e.target.value)}
-        />
-
-        {label.trim() ? (
-          <div>
-            <p className="muted">Position your hand, click record, and perform your sign within 3 seconds:</p>
-            <Camera onCapture={onCapture} buttonText={`Record and Save "${label.trim()}"`} />
-          </div>
-        ) : (
-          <p className="muted">Enter a label above to enable camera recording.</p>
-        )}
+      <h2>Add a custom sign</h2>
+      <p className="muted">Record your own sign (for example a name sign). The landmarks are stored as a real reference
+        clip and shown in Practice and Text → Sign.</p>
+      <div style={{ maxWidth: 520 }}>
+        <label>Word or phrase
+          <input value={label} placeholder="e.g. coffee, my name sign" onChange={(e) => setLabel(e.target.value)} />
+        </label>
+        {label.trim()
+          ? <Camera mode="hold" onSegment={onSegment} holdLabel={`Hold to record "${label.trim()}"`} disabled={loading} />
+          : <p className="muted">Enter a label to enable recording.</p>}
       </div>
-
-      {loading && <p className="note">Saving sign to database...</p>}
-      {err && <p className="error" style={{ marginTop: "1rem" }}>{err}</p>}
-      {msg && <p className="note" style={{ marginTop: "1rem" }}>{msg}</p>}
+      {loading && <p className="note">Saving…</p>}
+      {err && <p className="error">{err}</p>}
+      {msg && <p className="note">{msg}</p>}
     </section>
   );
 }

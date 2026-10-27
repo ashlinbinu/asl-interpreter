@@ -1,34 +1,52 @@
-const BASE = import.meta.env.VITE_API_URL || "/api";
+import { learner } from "./lib/identity.js";
 
-async function req(path, body) {
-  const r = await fetch(BASE + path, body && {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+const BASE = import.meta.env.VITE_API_URL || "/api";
+// Media (reference videos) is served next to the API: /api -> /media
+export const MEDIA_BASE = BASE.replace(/\/api\/?$/, "");
+
+async function req(path, body, method) {
+  const opts = body instanceof FormData
+    ? { method: "POST", body }
+    : body !== undefined
+      ? { method: method || "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+      : undefined;
+  const r = await fetch(BASE + path, opts);
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
-    throw new Error(typeof e.detail === "string" ? e.detail : "Request failed");
+    const detail = typeof e.detail === "string" ? e.detail : Array.isArray(e.detail) ? e.detail.map((d) => d.msg).join("; ") : "";
+    const err = new Error(detail || `Request failed (${r.status})`);
+    err.status = r.status;
+    throw err;
   }
   return r.json();
 }
 
+const qs = (o) => {
+  const p = new URLSearchParams();
+  Object.entries(o).forEach(([k, v]) => v !== undefined && v !== null && v !== "" && p.set(k, v));
+  const s = p.toString();
+  return s ? "?" + s : "";
+};
+
+export const mediaUrl = (u) => (u && u.startsWith("/media") ? MEDIA_BASE + u : u);
+
 export const api = {
   status: () => req("/status"),
-  signs: (q = "", category = "") => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (category) params.set("category", category);
-    const qs = params.toString();
-    return req(`/signs${qs ? "?" + qs : ""}`);
-  },
+  signs: (q = "", category = "", extra = {}) => req(`/signs${qs({ q, category, ...extra })}`),
   sign: (id) => req(`/signs/${id}`),
-  recognize: (payload) => {
-    // payload can be { frames, image } or array of frames (backward compatibility)
-    const body = Array.isArray(payload) ? { frames: payload } : payload;
-    return req("/recognize", body);
-  },
-  score: (sign_id, frames) => req("/score", { sign_id, frames }),
+  recognize: (payload) => req("/recognize", { left_handed: learner().leftHanded, ...payload }),
+  score: (sign_id, frames, mode = "practice") =>
+    req("/score", { sign_id, frames, mode, left_handed: learner().leftHanded, learner_id: learner().id }),
   textToSign: (text) => req("/text-to-sign", { text }),
-  addSign: (label, frames) => req("/signs", { label, frames }),
+  addSign: (label, frames) => req("/signs", { label, frames, learner_id: learner().id }),
+  attempt: (sign_id, score, extra = {}) => req("/attempts", { learner_id: learner().id, sign_id, score, ...extra }),
+  progress: () => req(`/progress${qs({ learner_id: learner().id })}`),
+  recordingSummary: (signer_id) => req(`/recordings/summary${qs({ signer_id })}`),
+  uploadRecording: (meta, frames, videoBlob) => {
+    const fd = new FormData();
+    fd.append("meta", JSON.stringify(meta));
+    fd.append("landmarks", new Blob([JSON.stringify(frames)], { type: "application/json" }), "landmarks.json");
+    if (videoBlob) fd.append("video", videoBlob, "clip.webm");
+    return req("/recordings", fd);
+  },
 };

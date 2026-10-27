@@ -1,7 +1,10 @@
 # Handspeak → ASL learning coach: audit and implementation plan
 
-Status: P0 and P1 are being implemented on branch `feature/learning-coach`. P2 onward waits for the
-answers in [§6 Open questions](#6-open-questions-ask).
+Status (2026-10-27), on branch `feature/learning-coach`:
+- **P0 done.** 39 pytest tests pass, including exact Python↔JS feature parity.
+- **P1 code-complete. Its quality gates are not yet measured,** because no real multi-signer alphabet data exists
+  yet (ASK-2). The full recorder → train → serve loop was verified end to end on scratch data.
+- P2 onward waits for the answers in [§6 Open questions](#6-open-questions-ask).
 
 ---
 
