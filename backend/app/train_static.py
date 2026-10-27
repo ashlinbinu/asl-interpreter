@@ -204,7 +204,8 @@ def report(y_true, y_pred, classes):
     pairs.sort(key=lambda d: -d["rate"])
     watched = [{"set": "".join(sset), "accuracy": round(float(np.mean([y_pred[k] == y_true[k]
                 for k in range(len(y_true)) if y_true[k] in sset])), 3)}
-               for sset in CONFUSABLE_SETS if any(t in sset for t in y_true)]
+               for sset in CONFUSABLE_SETS
+               if all(c in classes for c in sset) and any(t in sset for t in y_true)]
     return {
         "accuracy": round(float(accuracy_score(y_true, y_pred)), 4),
         "macro_f1": round(float(f1_score(y_true, y_pred, labels=classes, average="macro", zero_division=0)), 4),

@@ -14,9 +14,9 @@ it states nothing, we treat the data as research-only and never redistribute it.
 | `own` | Recorder page / `record_cli.py`, webcam video + landmarks | local | own recordings, signer consent | ready (P1) |
 | `user` | "Add a sign" custom signs | local | user-contributed | ready |
 | `asl_citizen` | Microsoft ASL Citizen: 83,399 isolated-sign videos, 2,731 ASL-LEX glosses, 52 signers, official signer splits (train 35 / val 6 / test 11 signers). **Inspected 2026-10-27: no letter glosses (0 of 26); all 50 words present** (29–39 clips, 26–31 signers each; *goodbye* is glossed `BYE`) | **45.9 GB** zip, direct link, HTTP ranges supported: only the 1,557 vocabulary clips (791 MB) are fetched | Microsoft research license: **non-commercial, non-revenue research only** | **ingested (words)** |
-| `chicago_fsvid` | ChicagoFSVid (Kim et al. 2017), signers Andy, Drucie, Rita, Robin. **The public release is not video:** MATLAB 7.3 (HDF5) arrays of 128×128 single-channel **hand crops** for every frame of the fingerspelled words, a letter label per frame, 10 folds, plus HOG features. The isolated letters described in the paper are not in it. | **1.7 GB** `.tgz` (downloaded to `<store>/downloads/chicago_fsvid/`) | **none stated** ("released publicly"; cite Kim et al. 2017); research-only, kept local | downloaded; reading it needs `h5py`. Crops follow the hand, so letter location and Z's trajectory are lost. |
+| `chicago_fsvid` | ChicagoFSVid (Kim et al. 2017), signers Andy, Drucie, Rita, Robin. **The public release is not video:** MATLAB 7.3 (HDF5) arrays of 128×128 single-channel **hand crops** for every frame of the fingerspelled words, a letter label per frame, 10 folds, plus HOG features. The isolated letters described in the paper are not in it. | **1.7 GB** `.tgz` (downloaded to `<store>/downloads/chicago_fsvid/`) | **none stated** ("released publicly"; cite Kim et al. 2017); research-only, kept local | **ingested (static letters)**: the centre of each letter run, recoloured for MediaPipe (skin tint, light background, ×2); hand found in Andy 1,152 / Drucie 1,185 / Rita 1,205 / Robin 238 frames. `domain=hand_crop`, so it never makes the alphabet "verified". Crops follow the hand, so letter location and Z's trajectory are lost. |
 | `chicago_fswild` | ChicagoFSWild / FSWild+: 7,304 / 55,232 fingerspelled sequences, 160 / 260 signers, JPEG frames from online video | **14.3 GB** / **87.4 GB**, direct links | none stated; source videos belong to their creators | not planned: sequence labels only (no letter timing) |
-| `kaggle_asl_alphabet` | Kaggle `grassknoted/asl-alphabet` by Akash: 3,000 200×200 photos per letter, **1 signer**, 24 meaningful static letters (J/Z skipped) | 1.1 GB, downloaded by you to `<store>/raw/asl_alphabet_train/` | **GPL 2** (Kaggle metadata) | **supplementary static training only, never validation/test**; 400 per letter ingested |
+| `kaggle_asl_alphabet` | Kaggle `grassknoted/asl-alphabet` by Akash: 3,000 200×200 photos per letter, **1 signer**, 24 meaningful static letters (J/Z skipped) | 1.1 GB, downloaded by you to `<store>/raw/asl_alphabet_train/` | **GPL 2** (Kaggle metadata) | **supplementary static training only, never validation/test**; 400 per letter tried, 7,374 with a detected hand (65–93% per letter) |
 | `fsboard` | FSboard (Google, CVPR 2025): 250 h of fingerspelled phrases, 147 Deaf signers, phone video | Kaggle `googleai/fsboard`, size not confirmed (very large) | CC BY 4.0 | not planned: phrases without letter timing |
 | `semlex` | Sem-Lex Benchmark: 84k isolated-sign videos, 41 Deaf signers | instructions at `github.com/leekezar/SemLex` | CC BY-NC-SA 4.0 | optional; letter glosses not checked |
 | `surrey_fs` | Surrey/Exeter ASL finger-spelling, dataset A: 5 signers, 24 static letters, Kinect RGB + depth stills | direct link listed on the Exeter page (not checked) | none stated | optional supplementary static |
@@ -27,8 +27,9 @@ it states nothing, we treat the data as research-only and never redistribute it.
 
 ## Vocabulary
 
-- Tier 1: A–Z. 24 static letters go to the static model; **J and Z are dynamic** (sequence model, P3). Built from
-  video, see [PLAN.md §7](PLAN.md#7-alphabet-from-video).
+- Tier 1: A–Z. 24 static letters go to the static model. **J and Z are dynamic** and are not recognised or scored
+  yet: no source has multi-signer motion data for them (they can be recorded as 3 s takes). Built from video, see
+  [PLAN.md §7](PLAN.md#7-alphabet-from-video).
 - Tier 2: 50 words, [PLAN.md §4](PLAN.md#4-proposed-vocabulary-ask-1) (`backend/app/vocabulary.py`). A word stays if a
   source has ≥15 clips and ≥8 signers for it; `scripts.datasets.inspect_asl_citizen` reports this per word.
 
@@ -49,5 +50,14 @@ most clips is chosen. Synonym glosses (e.g. `TOILET` for *bathroom*) are only us
 ## Counts
 
 <!-- counts:start -->
-No real clips have been ingested yet. Regenerate with `python -m scripts.dataset_report --write-docs`.
+Generated 2026-10-27 by `python -m scripts.dataset_report --write-docs`. Signers are counted per source (`source:signer`).
+
+| Category | Source | Signs | Clips | Signers | Clips by split |
+|---|---|---|---|---|---|
+| alphabet | chicago_fsvid | 24 | 3780 | 4 | none 3780 |
+| alphabet | kaggle_asl_alphabet | 24 | 7374 | 1 | none 7374 |
+| word | asl_citizen | 50 | 1554 | 48 | test 633, train 737, val 184 |
+
+Words with ≥15 clips and ≥8 signers: **50 of 50**.
+Letters with clips: 24 of 26; fewest signers for any letter: 0.
 <!-- counts:end -->

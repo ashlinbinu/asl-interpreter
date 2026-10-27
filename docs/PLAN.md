@@ -2,11 +2,15 @@
 
 Status (2026-10-27), on branch `feature/learning-coach`:
 - **P0 done.** Python↔JS feature parity is tested exactly.
-- **P1 code-complete. Its quality gates are not yet measured,** because no real multi-signer alphabet data exists
-  yet. The full recorder → train → serve loop was verified end to end on scratch data. **Change of plan:** the
-  alphabet will be built from video, not photos ([§7](#7-alphabet-from-video)).
-- **P2 (ASL Citizen word pipeline) code-complete,** tested on a fake archive (50 tests pass). Nothing has been
-  downloaded: the inspection and the ingest wait for your OK ([§6](#6-open-questions-ask)).
+- **P1 done, alphabet unverified.** The alphabet is built from video ([§7](#7-alphabet-from-video)): ChicagoFSVid
+  hand crops (4 signers) plus Kaggle photos as train-only supplement. 75.0% on the held-out signer, leave-one-signer-out
+  mean 77.1%; the photos don't improve it (76.8% without). Verification needs ≥3 full-frame video signers.
+- **P2 done.** All 50 words ingested from ASL Citizen (1,554 clips, 48 signers, 855 MB), each with a reference video
+  from a training-split signer.
+- **P3 done.** BiGRU word model: 84.0% top-1, 95.3% top-5, ECE 0.031 on 11 held-out signers; practice-score AUC 0.993.
+- **P4 and P5 done:** text → sign sequences, sentence practice, Leitner review queue, accessibility, EVALUATION.md.
+- 71 tests pass, including a real-video integration test. **Not done:** J/Z scoring (no multi-signer motion data) and
+  a manual check in a browser with a webcam.
 
 ---
 
@@ -130,11 +134,36 @@ Original plan:
 - **Gates:** top-1/top-5 on held-out signers per class (reported as-is, not inflated); scoring AUC of correct vs other-sign attempts; ≤200 ms per live update, FPS documented.
 
 ### P4: Text → Sign player + sentence practice
+Implemented:
+- `text_plan.py`: optional, flagged gloss normalisation (drops articles, forms of *be* and *to*; rule-based
+  lemmatiser, e.g. eating → EAT, families → FAMILY, stopped → STOP). Multi-word glosses via phrase matching.
+  Dropped and changed words are returned and shown.
+- `VideoSequencePlayer.jsx`: two stacked videos with a 150 ms crossfade (off under reduced motion). Speed
+  0.5/0.75/1×, loop, captions, timeline chips, keys ←/→/R/P. Letters without video play as timed cards.
+- `SentencePractice.jsx`: word by word (reference shown, each sign scored), or whole sentence (auto-segments
+  scored in order). Ends with a per-sign summary. Practice can replay your attempt next to the reference
+  landmarks (R).
+
+Original plan:
 - `app/text_plan.py`: tokenise → optional approximate English→gloss normalisation (drop articles/be-verbs/"to", light lemmatiser, multi-word glosses like THANK-YOU, clearly flagged) → known sign / fingerspelling fallback with alphabet clips → ordered entries `{gloss, word, sign_id, video_url, fingerspelled, letters[]}`.
 - `VideoSequencePlayer.jsx`: two stacked `<video>` elements with ~150 ms crossfade, 0.5/0.75/1× speed, loop, timeline chips, click-to-replay, captions. Banner: "Word-by-word glossing, not ASL grammar…".
 - Practice: reference video (+ skeleton overlay aligned to the learner's shoulders) | live camera; sentence mode practises word by word, then the whole sentence; side-by-side replay of the attempt.
 
 ### P5: progress, polish, evaluation
+Implemented:
+- `/api/progress` adds Leitner boxes (trailing run of scores ≥80, reviews due 0/1/2/4/7 days later) and a review
+  queue. `Progress.jsx` shows totals, a "review now" list, all signs and recent attempts.
+- Accessibility: visible focus rings, a single-column layout under 820 px, captions in the player, keyboard
+  control (Space hold-to-record, R replay, ←/→ and P in the player), reduced motion, high-contrast toggle, ARIA
+  roles on tabs, meters and live regions.
+- `scripts/evaluation_report.py` generates `docs/EVALUATION.md`: held-out metrics from `metrics.json` plus
+  latencies measured on this machine (Python and the browser JS code under Node).
+- `tests/test_integration_video.py`: real held-out ASL Citizen videos → MediaPipe → features → word model → API.
+  Skipped without local data.
+- In-browser word inference: `lib/wordModel.js` (CNN/BiGRU forward pass, parity test 1e-9 vs numpy) drives the live
+  Words tab and the live word meter in Practice.
+
+Original plan:
 - `GET /api/progress`, Progress page (history, mastered = score ≥ 80 on 3 of the last 4 attempts, Leitner-style review queue).
 - Accessibility pass (captions, keyboard: Space = hold-to-record, R = replay, ←/→ = words; reduced motion; high-contrast toggle).
 - `docs/EVALUATION.md`: all metrics, confusion matrices, latency/FPS, limitations. One integration test on a sample video.

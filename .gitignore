@@ -9,3 +9,7 @@ __pycache__
 # Large/derived data: landmarks, media, recordings, downloaded MediaPipe models
 backend/data/
 backend/models/mediapipe/
+# Trained models: derived from non-commercial / research-only datasets (docs/DATASET.md); rebuild with
+# scripts.train_alphabet and scripts.train_words
+backend/models/alphabet/
+backend/models/words/
