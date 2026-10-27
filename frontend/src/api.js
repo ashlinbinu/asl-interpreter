@@ -37,7 +37,7 @@ export const api = {
   recognize: (payload) => req("/recognize", { left_handed: learner().leftHanded, ...payload }),
   score: (sign_id, frames, mode = "practice") =>
     req("/score", { sign_id, frames, mode, left_handed: learner().leftHanded, learner_id: learner().id }),
-  textToSign: (text) => req("/text-to-sign", { text }),
+  textToSign: (text, normalize = false) => req("/text-to-sign", { text, normalize }),
   addSign: (label, frames) => req("/signs", { label, frames, learner_id: learner().id }),
   attempt: (sign_id, score, extra = {}) => req("/attempts", { learner_id: learner().id, sign_id, score, ...extra }),
   progress: () => req(`/progress${qs({ learner_id: learner().id })}`),

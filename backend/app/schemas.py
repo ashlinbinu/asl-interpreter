@@ -84,6 +84,7 @@ class SignIn(BaseModel):
 
 class TextIn(BaseModel):
     text: Annotated[str, Field(max_length=500)]
+    normalize: bool = Field(False, description="approximate English -> gloss normalisation (flagged in the result)")
 
 
 class AttemptIn(BaseModel):
