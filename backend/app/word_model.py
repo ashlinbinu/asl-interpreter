@@ -84,6 +84,12 @@ def softmax(z, temperature=1.0):
     return e / e.sum(axis=-1, keepdims=True)
 
 
+def score_vector(p_target: float, pct: dict) -> list[float]:
+    """Inputs of the fitted score: log-odds of the target probability + component percentiles (0-1)."""
+    p = min(max(p_target, 1e-6), 1 - 1e-6)
+    return [float(np.log(p / (1 - p)))] + [(pct[g] or 0) / 100 for g in COMPONENTS]
+
+
 def dtw_path(a, b, band=BAND):
     """Banded DTW between (T, D) sequences -> (path [(i, j)], mean step cost)."""
     n, m = len(a), len(b)
@@ -216,8 +222,7 @@ class WordModel:
         pct = self.refs.percentiles(label, dists)
         w = self.score_weights
         if w:
-            x = [pt] + [(pct[g] or 0) / 100 for g in COMPONENTS]
-            s = 100 * _sigmoid(float(np.dot(w["coef"], x) + w["intercept"]))
+            s = 100 * _sigmoid(float(np.dot(w["coef"], score_vector(pt, pct)) + w["intercept"]))
         else:
             vals = [v for v in pct.values() if v is not None]
             s = 50 * pt + 0.5 * (np.mean(vals) if vals else 0)

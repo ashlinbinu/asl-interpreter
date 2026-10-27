@@ -20,7 +20,7 @@ from sklearn.metrics import f1_score, roc_auc_score
 
 from . import features as fx
 from .train_static import _split_by_signer, ece, fit_temperature, reject_threshold, report
-from .word_model import COMPONENTS, References, WordNet, component_distances, dtw_path, softmax
+from .word_model import COMPONENTS, References, WordNet, score_vector, softmax
 
 N_REFS = 5            # reference clips per sign (distinct training signers)
 MIN_VERIFIED_SIGNERS = 3
@@ -185,17 +185,18 @@ def component_stats(train_clips, refs: References, net: WordNet, max_per_class=6
     return stats
 
 
-def score_features(net, refs, temperature, classes, clips, rng):
-    """For each clip: a positive pair (its own sign) and a negative pair (a random other sign)."""
+def score_features(net, refs, temperature, classes, clips, rng, negatives=3):
+    """For each clip: a positive pair (its own sign) and `negatives` pairs with random other signs."""
     X, y = [], []
     for c in clips:
         p = softmax(net.logits(c["seq"]), temperature)
         x = net.standardize(c["seq"])
-        for label, target in ((c["label"], 1), (classes[rng.integers(len(classes))], 0)):
-            if target == 0 and label == c["label"]:
-                continue
+        others = [k for k in classes if k != c["label"]]
+        pairs = [(c["label"], 1)] + [(others[i], 0) for i in rng.choice(len(others), min(negatives, len(others)),
+                                                                          replace=False)]
+        for label, target in pairs:
             pct = refs.percentiles(label, refs.compare(x, label)[1])
-            X.append([float(p[classes.index(label)])] + [(pct[g] or 0) / 100 for g in COMPONENTS])
+            X.append(score_vector(float(p[classes.index(label)]), pct))
             y.append(target)
     return np.array(X), np.array(y)
 
@@ -262,13 +263,13 @@ def train(clips, out_root: Path, archs=("cnn", "bigru"), seed=0, epochs=120, log
     log("score calibration on validation signers ...")
     rng = np.random.default_rng(seed)
     Xs_va, ys_va = score_features(wn, refs, temperature, classes, parts["val"], rng)
-    lr = LogisticRegression(C=1.0, max_iter=1000).fit(Xs_va, ys_va)
+    lr = LogisticRegression(C=0.3, max_iter=1000).fit(Xs_va, ys_va)
     Xs_te, ys_te = score_features(wn, refs, temperature, classes, parts["test"], rng)
     auc_te = roc_auc_score(ys_te, lr.predict_proba(Xs_te)[:, 1])
     auc_prob_only = roc_auc_score(ys_te, Xs_te[:, 0])
     comp_auc = {g: round(float(roc_auc_score(ys_te, Xs_te[:, 1 + k])), 4) for k, g in enumerate(COMPONENTS)
                 if len(set(Xs_te[:, 1 + k])) > 1}
-    weights = {"features": ["target_probability"] + list(COMPONENTS), "coef": lr.coef_[0].tolist(),
+    weights = {"features": ["target_logodds"] + list(COMPONENTS), "coef": lr.coef_[0].tolist(),
                "intercept": float(lr.intercept_[0])}
 
     version = "words-" + time.strftime("%Y%m%d-%H%M%S")
