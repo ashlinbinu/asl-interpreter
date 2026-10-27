@@ -3,6 +3,7 @@ import Camera from "../components/Camera.jsx";
 import ReferencePanel from "../components/ReferencePanel.jsx";
 import { api } from "../api.js";
 import { useLiveLetters } from "../lib/useLiveLetters.js";
+import { useLiveWords } from "../lib/useLiveWords.js";
 import { speak } from "../lib/speech.js";
 
 function Matches({ matches, rejectThreshold, onLearn, letterIds }) {
@@ -27,6 +28,7 @@ function Matches({ matches, rejectThreshold, onLearn, letterIds }) {
 export default function Recognize({ go }) {
   const [mode, setMode] = useState("live");
   const live = useLiveLetters(mode === "live");
+  const liveWords = useLiveWords(mode === "words");
   const [server, setServer] = useState(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,8 +40,10 @@ export default function Recognize({ go }) {
     api.signs("", "alphabet").then((l) => setLetterIds(Object.fromEntries(l.map((s) => [s.label, s.id])))).catch(() => {});
   }, []);
 
-  const matches = mode === "live" ? live.top : server?.matches;
-  const threshold = mode === "live" ? live.model?.rejectThreshold ?? 0 : server?.rejected ? 2 : 0;
+  const wordsLive = mode === "words" && liveWords.top.length > 0;
+  const matches = mode === "live" ? live.top : wordsLive ? liveWords.top : server?.matches;
+  const threshold = mode === "live" ? live.model?.rejectThreshold ?? 0
+    : wordsLive ? liveWords.model?.rejectThreshold ?? 0 : server?.rejected ? 2 : 0;
   const learn = (signId, label) => setFocus({ id: signId, label });
   const switchMode = (m) => { setMode(m); setServer(null); setErr(""); };
 
@@ -88,7 +92,11 @@ export default function Recognize({ go }) {
             {live.ready && <p className="muted small">In-browser model {live.model.version} · {live.latencyMs.toFixed(1)} ms per update</p>}
           </>
         ) : mode === "words" ? (
-          <Camera key="words" mode="auto" kind="dynamic" onSegment={onSegment} />
+          <>
+            {liveWords.error && <p className="error">{liveWords.error}. Train it first: python -m scripts.train_words</p>}
+            <Camera key="words" mode="auto" kind="dynamic" onFrame={liveWords.onFrame} onSegment={onSegment} />
+            {liveWords.ready && <p className="muted small">In-browser word model {liveWords.model.version} · {liveWords.latencyMs.toFixed(0)} ms per update</p>}
+          </>
         ) : (
           <div>
             <label className="dropzone">
@@ -110,7 +118,7 @@ export default function Recognize({ go }) {
         {err && <p className="error">{err}</p>}
         {!matches?.length && !loading && !err && <p className="muted">Matches and confidence appear here.</p>}
         <Matches matches={matches} rejectThreshold={threshold} onLearn={learn} letterIds={letterIds} />
-        {mode === "live" && server?.matches?.[0] && (
+        {mode !== "upload" && server?.matches?.[0] && (
           <p className="muted small">Last auto-captured: <b>{server.matches[0].label}</b> ({Math.round(server.matches[0].confidence * 100)}%, server check)</p>
         )}
         {focus?.id && (

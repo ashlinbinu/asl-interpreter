@@ -113,6 +113,12 @@ def test_attempts_and_progress_mastery(client):
     p = client.get("/api/progress", params={"learner_id": "learner-prog"}).json()
     entry = next(s for s in p["signs"] if s["sign_id"] == sid)
     assert entry["attempts"] == 4 and entry["mastered"] and entry["best"] == 90
+    assert entry["box"] == 1 and entry["due"] is False and sid not in p["review_queue"]   # 60 reset the run
+    assert client.post("/api/attempts", json={"learner_id": "learner-prog", "sign_id": sid,
+                                              "score": 30}).status_code == 200
+    p = client.get("/api/progress", params={"learner_id": "learner-prog"}).json()
+    entry = next(s for s in p["signs"] if s["sign_id"] == sid)
+    assert entry["box"] == 0 and entry["due"] and p["review_queue"][0] == sid
 
 
 def test_body_size_limit(client):

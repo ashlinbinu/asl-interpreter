@@ -4,6 +4,7 @@ import TextToSign from "./pages/TextToSign.jsx";
 import Practice from "./pages/Practice.jsx";
 import Record from "./pages/Record.jsx";
 import Library from "./pages/Library.jsx";
+import Progress from "./pages/Progress.jsx";
 import { api } from "./api.js";
 import { learner, updateLearner } from "./lib/identity.js";
 
@@ -11,6 +12,7 @@ const TABS = [
   ["recognize", "Sign → text", Recognize],
   ["text", "Text → sign", TextToSign],
   ["practice", "Practice", Practice],
+  ["progress", "Progress", Progress],
   ["record", "Record dataset", Record],
   ["library", "Add a sign", Library],
 ];
@@ -38,7 +40,7 @@ export default function App() {
   const [status, setStatus] = useState(null);
   const [me, setMe] = useState(learner());
   const Page = TABS.find((t) => t[0] === nav.tab)[2];
-  const go = (tab, signId = null) => setNav({ tab, signId });
+  const go = (tab, signId = null, extra = {}) => setNav({ tab, signId, ...extra });
 
   useEffect(() => {
     const fetchStatus = () => api.status().then(setStatus).catch(() => setStatus({ ok: false }));
@@ -79,7 +81,8 @@ export default function App() {
         </div>
       </header>
       <main id="main">
-        <Page go={go} initialSignId={nav.signId} key={nav.tab + (nav.signId ?? "")} />
+        <Page go={go} initialSignId={nav.signId} initialSentence={nav.sentence}
+              key={nav.tab + (nav.signId ?? "") + (nav.sentence ?? "")} />
       </main>
       <footer className="muted small">
         Handspeak is a learning aid, not a certified ASL translator. Scores are estimates; facial grammar and other

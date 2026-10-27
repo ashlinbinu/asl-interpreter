@@ -4,6 +4,7 @@ import logging
 import re
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Optional
 
 import numpy as np
@@ -29,6 +30,7 @@ from .text_plan import plan
 logger = logging.getLogger("asl.api")
 settings = get_settings()
 MASTERY_SCORE, MASTERY_OF_LAST = 80.0, (3, 4)
+REVIEW_DAYS = (0, 1, 2, 4, 7)      # Leitner box -> days until the sign is due again
 
 
 def startup():
@@ -359,8 +361,8 @@ def score(body: ScoreIn):
 @app.post("/api/text-to-sign")
 def text_to_sign(body: TextIn):
     if not body.text.strip():
-        return {"entries": [], "missing": [], "signs": [], "note": None}
-    res = plan(body.text, registry)
+        return {"entries": [], "missing": [], "dropped": [], "signs": [], "note": None}
+    res = plan(body.text, registry, body.normalize)
     # Backward-compatible flat list (one item per sign or letter).
     flat = []
     for ent in res["entries"]:
@@ -453,23 +455,47 @@ def progress(learner_id: str = Query(..., pattern=r"^[A-Za-z0-9_-]{6,64}$")):
     for a in rows:
         per.setdefault(a.sign_id, []).append(a)
     need, of = MASTERY_OF_LAST
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     signs = []
     for sid, atts in per.items():
         e = registry.by_id.get(sid)
         last = [a.score or 0 for a in atts[-of:]]
+        box = 0                                    # Leitner box: trailing run of passing attempts
+        for a in reversed(atts):
+            if (a.score or 0) < MASTERY_SCORE or box == len(REVIEW_DAYS) - 1:
+                break
+            box += 1
+        when = atts[-1].created_at
+        due = when is None or (now - when).total_seconds() >= REVIEW_DAYS[box] * 86400
         signs.append({"sign_id": sid, "label": e.label if e else str(sid), "attempts": len(atts),
                       "best": max(a.score or 0 for a in atts), "last": atts[-1].score,
                       "recent_mean": round(sum(last) / len(last), 1),
-                      "mastered": sum(v >= MASTERY_SCORE for v in last) >= need,
-                      "last_at": atts[-1].created_at.isoformat() if atts[-1].created_at else None})
+                      "mastered": sum(v >= MASTERY_SCORE for v in last) >= need, "box": box, "due": due,
+                      "last_at": when.isoformat() if when else None})
     signs.sort(key=lambda d: (d["mastered"], d["recent_mean"]))
+    queue = [d["sign_id"] for d in sorted((d for d in signs if d["due"]), key=lambda d: (d["box"], d["recent_mean"]))]
     recent = [{"sign_id": a.sign_id, "score": a.score, "mode": a.mode,
                "at": a.created_at.isoformat() if a.created_at else None} for a in rows[-20:]][::-1]
-    return {"learner_id": learner_id, "signs": signs, "recent": recent,
-            "mastery_rule": f"score ≥ {MASTERY_SCORE:.0f} in {need} of the last {of} attempts"}
+    return {"learner_id": learner_id, "signs": signs, "recent": recent, "review_queue": queue,
+            "mastery_rule": f"score ≥ {MASTERY_SCORE:.0f} in {need} of the last {of} attempts",
+            "review_rule": f"Leitner boxes 0-{len(REVIEW_DAYS) - 1}; a sign is due {list(REVIEW_DAYS)} days after "
+                           "its last attempt, by box"}
 
 
 # ---------------------------------------------------------------- model files for in-browser inference
+
+@app.get("/api/models/words")
+def word_model_file():
+    """Exported word-network weights for in-browser inference (references and scoring stay server-side)."""
+    wm = models.words
+    if wm is None:
+        raise HTTPException(404, "Word model not trained yet.")
+    if getattr(wm, "_browser", None) is None:
+        d = json.loads((wm.dir / "model.json").read_text(encoding="utf-8"))
+        wm._browser = {k: d[k] for k in ("version", "spec_version", "classes", "net", "temperature",
+                                         "reject_threshold")}
+    return JSONResponse(wm._browser, headers={"Cache-Control": "no-cache"})
+
 
 @app.get("/api/models/alphabet")
 def alphabet_model_file():

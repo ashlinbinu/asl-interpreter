@@ -61,6 +61,36 @@ def test_numpy_forward_matches_torch(arch):
     np.testing.assert_allclose(wn.logits(x), ref, atol=1e-4)
 
 
+@pytest.mark.parametrize("arch", ["cnn", "bigru"])
+def test_browser_forward_matches_numpy(arch, tmp_path):
+    import json
+    import shutil
+    import subprocess
+
+    from app.config import REPO_ROOT
+    from app.train_words import ARCHS
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    torch.manual_seed(1)
+    net = ARCHS[arch](fx.F, 5).eval()
+    rng = np.random.default_rng(1)
+    d = {**net.export(), "mean": rng.normal(0, 0.1, fx.F).tolist(), "std": rng.uniform(0.5, 2, fx.F).tolist()}
+    x = rng.normal(size=(fx.T, fx.F))
+    x[:, 5:40] = 0.0                       # sparse inputs exercise the JS zero-skip path
+    (tmp_path / "m.json").write_text(json.dumps({"version": "t", "classes": list("abcde"), "temperature": 1.0,
+                                                 "reject_threshold": 0.0, "net": d}))
+    (tmp_path / "x.json").write_text(json.dumps(x.tolist()))
+    script = ("import {readFileSync} from 'node:fs';"
+              "import {WordModel} from './src/lib/wordModel.js';"
+              f"const m=new WordModel(JSON.parse(readFileSync({json.dumps(str(tmp_path / 'm.json'))},'utf8')));"
+              f"const x=JSON.parse(readFileSync({json.dumps(str(tmp_path / 'x.json'))},'utf8'));"
+              "process.stdout.write(JSON.stringify(m.logits(x)));")
+    res = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, check=True,
+                         cwd=REPO_ROOT / "frontend")
+    np.testing.assert_allclose(np.array(json.loads(res.stdout)), WordNet(d).logits(x), atol=1e-9)
+
+
 def test_dtw_aligns_time_shifted_copies():
     a = np.sin(np.linspace(0, 3, 32))[:, None]
     b = np.sin(np.linspace(0, 3, 32) - 0.3)[:, None]
