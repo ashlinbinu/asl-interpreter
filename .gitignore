@@ -3,3 +3,9 @@ dist
 __pycache__
 *.db
 .env
+.venv/
+.pytest_cache/
+*.part
+# Large/derived data: landmarks, media, recordings, downloaded MediaPipe models
+backend/data/
+backend/models/mediapipe/

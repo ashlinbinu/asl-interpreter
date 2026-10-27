@@ -1,3 +1,4 @@
+# Legacy v0 DTW (pure Python). Dev fallback for synthetic templates only; replaced in phase P3.
 import numpy as np
 
 
