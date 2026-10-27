@@ -2,7 +2,9 @@
 
     python -m scripts.datasets.ingest_asl_citizen --dry-run        # plan + bytes to transfer; downloads nothing
     python -m scripts.datasets.ingest_asl_citizen --max-gb 2       # fetch + extract (resumable, re-run safely)
-    python -m scripts.datasets.ingest_asl_citizen --word bathroom=TOILET --max-per-gloss 20 --workers 4
+    python -m scripts.datasets.ingest_asl_citizen --word bathroom=TOILET --max-per-gloss 20 --workers 3
+
+Each MediaPipe worker holds ~740 MB and many threads: beyond 3-4 workers a 16 GB laptop slows down, not up.
 
 Videos land in <store>/raw/asl_citizen/videos/, landmarks in <store>/landmarks/asl_citizen/<GLOSS>/. Every clip keeps
 its official split (train/val/test are disjoint signer sets), signer id, license and attribution.

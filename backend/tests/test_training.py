@@ -60,6 +60,11 @@ def test_verified_needs_three_video_signers(tmp_path, monkeypatch):
     assert not m2["verified"] and m2["supplementary_sources"] == ["kaggle_asl_alphabet"]
     assert m2["ablation"]["without_supplementary"]["n"] > 0
     assert StaticModel(out).summary()["verified"] is False
+    crops = synthetic_letter_clips()
+    for c in crops:
+        c["domain"] = "hand_crop"
+    mc, _ = train(crops, tmp_path / "c", n_aug=0, log=lambda *_: None)
+    assert not mc["verified"] and mc["test_domain"] == ["hand_crop"] and mc["leave_one_signer_out"]
 
 
 @pytest.mark.parametrize("kind", ["mlp", "rf"])

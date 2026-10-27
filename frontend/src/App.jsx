@@ -15,15 +15,20 @@ const TABS = [
   ["library", "Add a sign", Library],
 ];
 
-function ModelBadge({ m }) {
-  if (!m?.ready) return <span className="badge" title={m?.error || ""}>Alphabet model: not trained</span>;
+const HELD_OUT = ["signer_holdout", "official_signer_split"];
+
+function ModelBadge({ m, name }) {
+  if (!m?.ready) return <span className="badge" title={m?.error || ""}>{name} model: not trained</span>;
   const acc = m.accuracy != null ? `${(m.accuracy * 100).toFixed(1)}%` : "n/a";
-  const proto = m.eval_protocol === "signer_holdout" ? "held-out signers" : m.eval_protocol;
-  const why = m.verified ? "" : ` · unverified: needs ≥3 held-out video signers (has ${m.video_signers ?? 0})`;
+  const proto = HELD_OUT.includes(m.eval_protocol) ? "held-out signers" : m.eval_protocol;
+  const why = m.verified ? "" : name === "Alphabet"
+    ? ` · unverified: needs ≥3 held-out full-frame video signers (has ${m.video_signers ?? 0})`
+    : " · unverified: fewer than 3 held-out test signers";
+  const extra = m.top5_accuracy != null ? ` · top-5 ${(m.top5_accuracy * 100).toFixed(1)}%` : "";
   return (
     <span className={`badge ${m.verified && !m.warning ? "ai" : "warnb"}`}
-          title={`${m.version} · ${m.type} · ${proto}${why}${m.warning ? " · " + m.warning : ""}`}>
-      Alphabet: {acc} ({m.verified ? proto : "unverified"})
+          title={`${m.version} · ${m.type} · ${proto}${extra}${why}${m.warning ? " · " + m.warning : ""}`}>
+      {name}: {acc} ({m.verified ? proto : "unverified"})
     </span>
   );
 }
@@ -56,7 +61,8 @@ export default function App() {
             {status?.database?.connected
               ? <span className="badge ok">● {status.database.signs_count} signs</span>
               : <span className="badge err">○ Backend unavailable</span>}
-            {status?.models && <ModelBadge m={status.models.alphabet} />}
+            {status?.models && <ModelBadge m={status.models.alphabet} name="Alphabet" />}
+            {status?.models && <ModelBadge m={status.models.words} name="Words" />}
           </div>
         </div>
         <nav aria-label="Sections">

@@ -259,7 +259,7 @@ def recognize(body: RecognizeIn):
     if not frames:
         raise HTTPException(422, "Provide landmark frames or an image.")
     if body.mode == "word":
-        raise HTTPException(503, "The dynamic word model is not trained yet (phase P3).")
+        return _recognize_word(frames, body)
     model = models.alphabet
     if model is None:
         raise HTTPException(503, "The alphabet model is not trained yet. See README: 'Train the alphabet model'.")
@@ -276,6 +276,24 @@ def recognize(body: RecognizeIn):
                         "reference_video_url": e.video["url"] if e and e.video else None})
     return {"matches": matches, "rejected": bool(p.max() < model.reject_threshold), "method": "alphabet_static",
             "model_version": model.version, "frames_used": used}
+
+
+def _recognize_word(frames, body):
+    wm = models.words
+    if wm is None:
+        raise HTTPException(503, "The word model is not trained yet. Run: python -m scripts.train_words")
+    try:
+        seq = wm.sequence(frames, body.left_handed)
+    except NoHandError as e:
+        raise HTTPException(422, str(e)) from e
+    p = wm.proba_seq(seq)
+    matches = []
+    for i in np.argsort(-p)[:body.top_k]:
+        e = registry.by_label.get(norm(wm.classes[i]))
+        matches.append({"label": wm.classes[i], "confidence": round(float(p[i]), 4), "sign_id": e.id if e else None,
+                        "reference_video_url": e.video["url"] if e and e.video else None})
+    return {"matches": matches, "rejected": bool(p.max() < wm.reject_threshold), "method": f"words_{wm.net.kind}",
+            "model_version": wm.version, "frames_used": _hand_frames(frames)}
 
 
 def _legacy_score(frames, legacy_frames):
@@ -309,6 +327,21 @@ def score(body: ScoreIn):
         out = {"score": pct, "components": {"handshape": pct}, "hints": hints, "feedback": _feedback(pct),
                "predicted": pred, "sign_label": e.label, "method": "alphabet_static_probability",
                "model_version": model.version}
+    elif models.words is not None and e.kind == "dynamic" and e.label in models.words.classes:
+        wm = models.words
+        try:
+            seq = wm.sequence(frames, body.left_handed)
+        except NoHandError as err:
+            raise HTTPException(422, str(err)) from err
+        p = wm.proba_seq(seq)
+        r = wm.score(seq, e.label, p)
+        pred = wm.classes[int(np.argmax(p))]
+        hints = list(r["hints"])
+        if pred != e.label and p.max() >= wm.reject_threshold:
+            hints.insert(0, f"This looked more like {pred.upper()} than {e.label.upper()}.")
+        out = {"score": r["score"], "components": {k: v for k, v in r["components"].items() if v is not None},
+               "hints": hints or ["Close match with real signers' productions."], "feedback": _feedback(r["score"]),
+               "predicted": pred, "sign_label": e.label, "method": "words_dtw_components", "model_version": wm.version}
     elif settings.dev_synthetic and e.legacy_frames:
         pct = _legacy_score(frames, e.legacy_frames)
         out = {"score": pct, "components": {}, "hints": ["DEV ONLY: compared against a synthetic template."],

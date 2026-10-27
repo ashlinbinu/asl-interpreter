@@ -39,13 +39,14 @@ export default function Recognize({ go }) {
   }, []);
 
   const matches = mode === "live" ? live.top : server?.matches;
-  const threshold = mode === "live" ? live.model?.rejectThreshold ?? 0 : 0;
+  const threshold = mode === "live" ? live.model?.rejectThreshold ?? 0 : server?.rejected ? 2 : 0;
   const learn = (signId, label) => setFocus({ id: signId, label });
+  const switchMode = (m) => { setMode(m); setServer(null); setErr(""); };
 
   const onSegment = async ({ frames }) => {
     setErr("");
     try {
-      setServer(await api.recognize({ frames, mode: "alphabet" }));
+      setServer(await api.recognize({ frames, mode: mode === "words" ? "word" : "alphabet" }));
     } catch (e) { setErr(e.message); }
   };
 
@@ -68,17 +69,26 @@ export default function Recognize({ go }) {
       <div>
         <h2>Sign → text</h2>
         <div className="subnav" role="tablist">
-          <button role="tab" aria-selected={mode === "live"} className={mode === "live" ? "on" : ""} onClick={() => setMode("live")}>Live camera</button>
-          <button role="tab" aria-selected={mode === "upload"} className={mode === "upload" ? "on" : ""} onClick={() => setMode("upload")}>Image upload</button>
+          {[["live", "Letters (live)"], ["words", "Words (live)"], ["upload", "Image upload"]].map(([id, name]) => (
+            <button key={id} role="tab" aria-selected={mode === id} className={mode === id ? "on" : ""}
+                    onClick={() => switchMode(id)}>{name}</button>
+          ))}
         </div>
-        <p className="banner">Fingerspelling (static letters) is recognised now. Moving letters (J, Z) and whole words
-          need the dynamic word model (phase P3).</p>
+        {mode === "words" ? (
+          <p className="banner">Sign one of the 50 vocabulary words, then pause. The clip is matched by a model trained on
+            ASL Citizen signers; its held-out-signer accuracy is in the header badge. J and Z aren't recognised yet.</p>
+        ) : (
+          <p className="banner">Static fingerspelling letters are recognised in the browser. Moving letters (J, Z) need
+            motion data that isn't available yet.</p>
+        )}
         {mode === "live" ? (
           <>
             {live.error && <p className="error">{live.error}. Train it first: see README "Train the alphabet model".</p>}
             <Camera mode="auto" kind="static" onFrame={live.onFrame} onSegment={onSegment} />
             {live.ready && <p className="muted small">In-browser model {live.model.version} · {live.latencyMs.toFixed(1)} ms per update</p>}
           </>
+        ) : mode === "words" ? (
+          <Camera key="words" mode="auto" kind="dynamic" onSegment={onSegment} />
         ) : (
           <div>
             <label className="dropzone">

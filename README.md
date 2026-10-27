@@ -92,7 +92,7 @@ previous version is upgraded in place: the old templates are kept but tagged `sy
    ```powershell
    python -m scripts.datasets.inspect_asl_citizen            # index + split CSVs only, no videos
    python -m scripts.datasets.ingest_asl_citizen --dry-run   # shows the MB it would fetch
-   python -m scripts.datasets.ingest_asl_citizen --max-gb 2 --workers 6
+   python -m scripts.datasets.ingest_asl_citizen --word goodbye=BYE --max-gb 1 --workers 3   # 1,557 clips, 791 MB, ~1 h
    python -m scripts.build_reference_videos --category word
    python -m scripts.dataset_report --write-docs
    ```

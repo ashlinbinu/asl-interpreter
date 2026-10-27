@@ -338,8 +338,11 @@ def train(clips, out_root: Path, sources=None, test_signers=None, val_signers=No
                               "n": int((ste == s).sum())} for s in sorted(set(ste))}
 
     video_signers = sorted({c["signer_id"] for c in clips if not is_supplementary(c)})
+    # Hand crops (ChicagoFSVid) train and get their own cross-signer numbers, but only full-frame video can verify.
+    full_frame = sorted({c["signer_id"] for c in clips if not is_supplementary(c) and c.get("domain") != "hand_crop"})
     supplementary = [c for c in clips if is_supplementary(c)]
-    verified = signers["protocol"] == "signer_holdout" and len(video_signers) >= MIN_VERIFIED_SIGNERS
+    verified = (signers["protocol"] == "signer_holdout" and len(full_frame) >= MIN_VERIFIED_SIGNERS
+                and set(signers["test"]) <= set(full_frame))
     cv = leave_one_signer_out(clips, chosen, stride, seed) if 3 <= len(video_signers) <= 6 else None
     ablation = None
     if supplementary:
@@ -361,7 +364,8 @@ def train(clips, out_root: Path, sources=None, test_signers=None, val_signers=No
         "task": "alphabet_static", "classes": classes, "excluded_dynamic": sorted(DYNAMIC_LETTERS),
         "sources": sources or sorted({c.get("source", "?") for c in clips}),
         "eval_protocol": signers["protocol"], "signers": signers, "warning": warning,
-        "verified": verified, "video_signers": video_signers,
+        "verified": verified, "video_signers": video_signers, "full_frame_signers": full_frame,
+        "test_domain": sorted({c.get("domain") or "full_frame" for c in clips if assign[c["clip_id"]] == "test"}),
         "supplementary_sources": sorted({c.get("source", "?") for c in supplementary}),
         "leave_one_signer_out": cv, "ablation": ablation,
         "clips_without_hold": sum(1 for c in clips if not c.get("_holds")),

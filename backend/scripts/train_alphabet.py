@@ -39,6 +39,7 @@ def load_clips(sources=None, min_hand_rate=0.5):
         clips.append({"frames": frames, "label": sign.label, "signer_id": f"{clip.source}:{clip.signer_id}",
                       "clip_id": clip.id, "source": clip.source,
                       "supplementary": bool((clip.quality or {}).get("supplementary")),
+                      "domain": (clip.quality or {}).get("domain"),
                       "left_handed": bool((clip.quality or {}).get("left_handed") or meta.get("left_handed"))})
     return clips
 
@@ -74,7 +75,8 @@ def main():
     if metrics.get("ablation"):
         print("Without supplementary photos:", metrics["ablation"]["without_supplementary"])
     if not metrics["verified"]:
-        print(f"UNVERIFIED: needs >= 3 held-out video signers (has {len(metrics['video_signers'])}).")
+        print(f"UNVERIFIED: needs >= 3 full-frame video signers held out (has {len(metrics['full_frame_signers'])}; "
+              f"test domain {metrics['test_domain']}).")
     if metrics.get("warning"):
         print("WARNING:", metrics["warning"])
     print(f"Saved {out}")

@@ -3,10 +3,10 @@
     python -m scripts.build_reference_videos                 # every sign that has clips with a video
     python -m scripts.build_reference_videos --category word --force
 
-Choice: training-split clips first (so validation/test signers stay unseen by scoring references), then the best
-capture quality (hands and face visible, hands away from the frame edge), then the duration closest to the sign's
-median. The video is copied as-is. Clips that aren't H.264 may not play in every browser; they are listed in the
-report (re-encoding with imageio-ffmpeg is planned for P4).
+Choice: browser-playable codecs (H.264/VP8/VP9/AV1) first, then training-split clips (so validation/test signers
+stay unseen by scoring references), then the best capture quality (hands and face visible, hands away from the
+frame edge), then the duration closest to the sign's median. The video is copied as-is. If a sign has no playable
+clip it is listed in the report (re-encoding with imageio-ffmpeg is planned for P4).
 """
 import argparse
 import json
@@ -69,7 +69,8 @@ def build(category=None, force=False, log=print) -> dict:
             if current and not force and (st.media_dir / current.path).is_file():
                 report["kept"] += 1
                 continue
-            best = choose(clips)
+            playable = [c for c in clips if probe(st.store_dir / c.video_path).get("codec") in BROWSER_SAFE]
+            best = choose(playable or clips)
             src = st.store_dir / best.video_path
             rel = f"videos/{sign.id}/{best.source}_{best.id}{src.suffix.lower()}"
             dest = st.media_dir / rel

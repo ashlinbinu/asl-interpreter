@@ -28,11 +28,14 @@ export default function Practice({ initialSignId }) {
   const [progress, setProgress] = useState({});
   const [capture, setCapture] = useState("auto");
   const [speed, setSpeed] = useState(1);
+  const [wordsReady, setWordsReady] = useState(false);
   const isStaticLetter = sel?.category === "alphabet" && sel?.kind === "static";
+  const isMotionLetter = sel?.category === "alphabet" && sel?.kind === "dynamic";
   const live = useLiveLetters(isStaticLetter);
 
   const loadProgress = () => api.progress().then((p) => setProgress(Object.fromEntries(p.signs.map((s) => [s.sign_id, s])))).catch(() => {});
   useEffect(() => { loadProgress(); }, []);
+  useEffect(() => { api.status().then((s) => setWordsReady(!!s.models?.words?.ready)).catch(() => {}); }, []);
 
   useEffect(() => {
     api.signs("", category).then((data) => {
@@ -115,9 +118,17 @@ export default function Practice({ initialSignId }) {
                 <button className={capture === "hold" ? "on" : ""} onClick={() => setCapture("hold")}>Hold to record</button>
               </div>
             </div>
-            {!isStaticLetter && (
-              <p className="banner">Scoring for moving signs ({sel.label}) needs real reference clips and the dynamic scorer
-                (phases P2–P3). You can still practise against the reference.</p>
+            {isMotionLetter && (
+              <p className="banner">{sel.label} is a motion letter. It isn't scored yet: there is no multi-signer motion data
+                for it (record it on the Record page). You can still practise against the reference.</p>
+            )}
+            {!isStaticLetter && !isMotionLetter && !wordsReady && (
+              <p className="banner">Moving signs are scored once the word model is trained
+                (<code>python -m scripts.train_words</code>). You can still practise against the reference.</p>
+            )}
+            {!isStaticLetter && !isMotionLetter && wordsReady && (
+              <p className="muted small">Sign once, then pause: your attempt is compared with real signers' productions
+                (handshape, palm orientation, location, movement).</p>
             )}
             <Camera mode={capture} kind={isStaticLetter ? "static" : "dynamic"} onFrame={live.onFrame}
                     onSegment={onSegment} disabled={busy} holdLabel={`Hold to sign "${sel.label}"`} />
@@ -141,7 +152,7 @@ export default function Practice({ initialSignId }) {
                   <strong>{Math.round(res.score)}</strong>
                   <span>{res.feedback}</span>
                 </div>
-                {Object.entries(res.components).map(([k, v]) => <Meter key={k} label={k} value={v / 100} />)}
+                {Object.entries(res.components).map(([k, v]) => <Meter key={k} label={k.replace("_", " ")} value={v / 100} />)}
                 <ul className="hints">{res.hints.map((h) => <li key={h}>{h}</li>)}</ul>
                 <p className="muted small">Estimate from {res.method} ({res.model_version}). Scores are a learning aid, not a certification.</p>
               </div>

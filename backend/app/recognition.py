@@ -72,31 +72,35 @@ class StaticModel:
                 "eval_protocol": m.get("eval_protocol"), "accuracy": m.get("test", {}).get("accuracy"),
                 "macro_f1": m.get("test", {}).get("macro_f1"), "test_signers": m.get("signers", {}).get("test"),
                 "trained_at": m.get("created_at"), "warning": m.get("warning"),
-                "verified": bool(m.get("verified")), "video_signers": len(m.get("video_signers") or []),
+                "verified": bool(m.get("verified")), "video_signers": len(m.get("full_frame_signers") or []),
+                "test_domain": m.get("test_domain"),
                 "loso_mean": (m.get("leave_one_signer_out") or {}).get("mean")}
 
 
 class Models:
     def __init__(self):
         self.alphabet: StaticModel | None = None
+        self.words = None                      # app.word_model.WordModel
         self.errors: dict[str, str] = {}
 
     def load(self):
-        self.alphabet, self.errors = None, {}
-        d = current_dir("alphabet")
-        if d is None:
-            self.errors["alphabet"] = "not trained (run scripts.train_alphabet)"
-            return
-        try:
-            self.alphabet = StaticModel(d)
-            logger.info("Loaded alphabet model %s", self.alphabet.version)
-        except Exception as e:  # noqa: BLE001 - keep the API up without the model
-            self.errors["alphabet"] = str(e)
-            logger.error("Alphabet model failed to load: %s", e)
+        from .word_model import WordModel
+        self.alphabet, self.words, self.errors = None, None, {}
+        for task, cls, script in (("alphabet", StaticModel, "train_alphabet"), ("words", WordModel, "train_words")):
+            d = current_dir(task)
+            if d is None:
+                self.errors[task] = f"not trained (run scripts.{script})"
+                continue
+            try:
+                setattr(self, task, cls(d))
+                logger.info("Loaded %s model %s", task, getattr(self, task).version)
+            except Exception as e:  # noqa: BLE001 - keep the API up without the model
+                self.errors[task] = str(e)
+                logger.error("%s model failed to load: %s", task, e)
 
     def status(self):
-        a = self.alphabet.summary() if self.alphabet else {"ready": False, "error": self.errors.get("alphabet")}
-        return {"alphabet": a, "words": {"ready": False, "error": "dynamic word model arrives in phase P3"}}
+        return {t: (getattr(self, t).summary() if getattr(self, t) else {"ready": False, "error": self.errors.get(t)})
+                for t in ("alphabet", "words")}
 
 
 models = Models()

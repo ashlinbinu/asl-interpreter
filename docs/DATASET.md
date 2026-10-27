@@ -37,7 +37,7 @@ it states nothing, we treat the data as research-only and never redistribute it.
 ```powershell
 python -m scripts.datasets.inspect_asl_citizen                 # index + split CSVs only (~10 MB), no videos
 python -m scripts.datasets.ingest_asl_citizen --dry-run        # what would be fetched, and how many MB
-python -m scripts.datasets.ingest_asl_citizen --max-gb 2 --workers 6
+python -m scripts.datasets.ingest_asl_citizen --word goodbye=BYE --max-gb 1 --workers 3   # more workers run out of RAM
 python -m scripts.build_reference_videos --category word
 python -m scripts.dataset_report --write-docs                  # regenerates the table below
 ```

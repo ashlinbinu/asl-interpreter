@@ -97,7 +97,7 @@ Implemented (code + tests on a fake archive; nothing downloaded yet):
 - `scripts/datasets/ingest_asl_citizen.py`: fetches only the chosen glosses' videos, extracts landmarks in parallel (`--workers`), keeps the official signer split, license and attribution per clip. `--dry-run`, `--max-gb` cap, resumable.
 - `scripts/build_reference_videos.py`: one canonical clip per sign, chosen from **training-split** signers by capture quality. Copied to `<store>/media/videos/<sign_id>/`. Non-H.264 files are reported (re-encoding moves to P4).
 - `scripts/dataset_report.py --write-docs`: regenerates the counts in `docs/DATASET.md`.
-- Estimated runtime: ~1.4 s model load + 50–90 ms/frame per clip, so ~20 min for ~1,500 clips with 6 workers (12 logical CPUs).
+- Measured runtime on this laptop: ~60 ms/frame per process (hand 33 + pose 22). Throughput is 18 / 29 / 38 / 41 frames/s with 1 / 2 / 3 / 4 workers. **6 workers collapsed to ~5 frames/s:** each MediaPipe process runs ~67 threads and holds ~740 MB, so memory ran out. Use `--workers 3`. The 1,557 clips (118,667 frames) take ~55 min.
 
 Still to do in P2:
 - `scripts/datasets/ingest_wlasl.py`: downloader that skips dead URLs, trims to the annotated frame range, and reports coverage per gloss. Keeps C-UDA attribution.
@@ -106,6 +106,22 @@ Still to do in P2:
 - Already in place from P1: `GET /api/signs?has_video=`, `GET /api/signs/{id}` with `reference_video_url`, attribution and license; `/media` static with Range.
 
 ### P3: dynamic model, scoring, hints
+Implemented (2026-10-27; tests on synthetic signs, real numbers come from `scripts.train_words`):
+- `app/train_words.py` + `scripts/train_words.py`: 1D-CNN and BiGRU (torch, CPU), official ASL Citizen signer split.
+  Label smoothing; augmentation by time warp, shift, time mask and noise. Validation signers choose the model and
+  fit the temperature, reject threshold and score weights; test signers are only used for reporting. Weights are
+  exported to JSON; `app/word_model.py` runs them in numpy (parity test vs torch: 1e-4), so torch is training-only
+  and no ONNX packages are needed.
+- Scoring: banded DTW against 5 references per sign from distinct *training* signers. Per-component distances
+  (handshape, orientation, location, movement, two-hand) become percentiles of real same-sign attempts. A logistic
+  model fitted on validation signers combines them with the classifier's target probability; its test AUC
+  (correct sign vs a different sign) is in `metrics.json`. Hints come from the weakest components, with direction
+  (too high/low, across the body, bigger/smaller movement).
+- API: `/api/recognize` `mode: "word"` (top-k), `/api/score` for words. The UI has a live Words tab on Sign → text,
+  word scoring in Practice, and a Words badge with held-out accuracy.
+- Not done yet: in-browser word inference (the browser calls the API for words), and mirror augmentation.
+
+Original plan:
 - `scripts/train_words.py` (PyTorch): 1D-CNN baseline, BiGRU, optional Transformer; signer-split; label smoothing, class-balanced sampling, augmentation (rotation/scale/translation, mirror with consistent handedness swap, time-warp, landmark dropout/noise). Temperature scaling, "none" rejection threshold. ONNX export with `metrics.json`.
 - `app/dtw.py` (numba, banded) and `app/scoring.py`: component distances (handshape, orientation, location, movement, two-hand symmetry) vs K references from different signers (best-of-K + mean). Final score = weighted blend + classifier target probability. Weights/thresholds fitted on the validation signers (logistic fit of "correct sign vs other sign"); calibration documented in `docs/SCORING.md` with AUC.
 - Hint engine: weakest component → templated, sign-specific text ("Your hand is too low: THANK-YOU starts at the chin"), plus offending-hand/finger indices for red highlighting.
@@ -155,10 +171,12 @@ Pairs: MOTHER/FATHER (chin vs forehead), EAT/HOME (mouth vs mouth→cheek), HAPP
 Resolved: the vocabulary is the 50 words in §4 (subject to the dataset check), `PYTHON/Data` is retired, the
 alphabet comes from video with Kaggle photos as train-only supplement (§7).
 
-Answered 2026-10-27: datasets and licenses approved. The store is `D:\handspeak_data` (`backend/.env`).
+Answered 2026-10-27:
+- Datasets and licenses are approved, and the store is `D:\handspeak_data` (`backend/.env`).
+- `h5py` and CPU PyTorch are installed (`requirements-train.txt`).
+- You can't record videos, so the alphabet stays "unverified": no full-frame multi-signer letter video exists.
 
-1. **ASK-E, `h5py`:** OK to `pip install h5py` (~3 MB) to read ChicagoFSVid's MATLAB 7.3 files?
-2. **ASK-4, PyTorch:** OK to install CPU PyTorch in the venv for P3 training?
+No open questions.
 
 ---
 
@@ -209,8 +227,12 @@ dynamic model (P3) next to the words. Until then, Practice shows their reference
 2. **Done:** `app/holds.py` (centred ±50 ms speeds, so jitter isn't mistaken for motion) + tests. Training now
    learns static letters only from the middle 60% of each hold in a video clip.
 3. **Done:** Kaggle photos ingested as supplementary (`ingest_alphabet_images` marks every photo clip).
-4. **Blocked on `h5py`:** `ingest_chicago_fsvid.py`. Probe MediaPipe on the 128×128 crops first (tight crops
-   failed before, §1.2-2). If detection is poor, drop the source.
-5. **Needs you:** record at least 3 people (A–Z, 5+ takes each) on the Record page. That is the only source of
-   multi-signer full-frame letter video, and of J/Z motion. With fewer than 3, the badge stays "unverified".
+4. **Done:** `ingest_chicago_fsvid.py`.
+   - Probe on raw crops: MediaPipe detects a hand in 14% of them, with inconsistent left/right labels.
+   - Fix: tint each crop to a skin tone on a light background, upscale ×2 and pad. Detection rises to 49%.
+   - Landmarks are visibly right for some letters (F, S, O, E, M) and wrong for others (G, N, I).
+   - So clips are tagged `domain=hand_crop`, filtered (handedness score ≥0.8, majority label per signer), and
+     trained on. Their cross-signer accuracy is reported separately and never counts toward "verified".
+5. **Not possible now:** recordings of at least 3 people (you can't record). That is the only source of
+   full-frame multi-signer letter video, and of J/Z motion, so the alphabet badge stays "unverified".
 6. J/Z sequences go into the P3 dynamic dataset.
