@@ -7,8 +7,8 @@ practise with live feedback from your webcam, and sign to the camera to get the 
 > is word-by-word glossing, not ASL grammar, and facial grammar (non-manual markers) is only partly captured. Several
 > datasets it can use are **non-commercial** (see [docs/DATASET.md](docs/DATASET.md)).
 
-Status: phases P0–P1 of [docs/PLAN.md](docs/PLAN.md) are implemented. The alphabet pipeline needs real data before
-its accuracy can be measured (see "Getting data").
+Status: phases P0–P1 of [docs/PLAN.md](docs/PLAN.md) are implemented, and the P2 word-data pipeline (ASL Citizen) is
+code-complete. Neither model has real data yet, so no accuracy has been measured (see "Getting data").
 
 ## How it works
 
@@ -65,7 +65,8 @@ previous version is upgraded in place: the old templates are kept but tagged `sy
 1. **Record yourself (best data).** Open *Record dataset*, choose a signer id (e.g. `me_01`), pick letters, set
    5–10 repetitions and press Space for each take. Record other people under their own ids, with their consent.
    For a CLI alternative: `python -m scripts.record_cli --signer-id me_01 --alphabet --reps 5`.
-2. **Optional public alphabet images.** Download a folder-per-letter dataset, e.g. Kaggle *ASL Alphabet*
+2. **Optional public alphabet images (supplementary training data only, never used for testing).** Download a
+   folder-per-letter dataset, e.g. Kaggle *ASL Alphabet*
    (`grassknoted/asl-alphabet`; confirm its license on the page), then:
 
    ```powershell
@@ -85,7 +86,18 @@ previous version is upgraded in place: the old templates are kept but tagged `sy
    `models/alphabet/<version>/{model.joblib,browser.json,metrics.json}`. With a single signer it falls back to a block
    split and says so (that number overstates live accuracy). Restart the API to load the new model.
 
-Keep large data outside OneDrive: set `HANDSPEAK_STORE_DIR` (see below).
+4. **Word clips from ASL Citizen** (Microsoft; non-commercial research license, read it first). Only the clips for
+   the 50-word vocabulary are fetched from the 45.9 GB archive, using HTTP range requests:
+
+   ```powershell
+   python -m scripts.datasets.inspect_asl_citizen            # index + split CSVs only, no videos
+   python -m scripts.datasets.ingest_asl_citizen --dry-run   # shows the MB it would fetch
+   python -m scripts.datasets.ingest_asl_citizen --max-gb 2 --workers 6
+   python -m scripts.build_reference_videos --category word
+   python -m scripts.dataset_report --write-docs
+   ```
+
+Keep large data outside OneDrive: set `HANDSPEAK_STORE_DIR` (see below), e.g. `D:\handspeak-data`.
 
 ## Configuration (`backend/.env`, all optional)
 
@@ -138,10 +150,12 @@ Frames follow the `RawFrame` format in [docs/FEATURE_SPEC.md](docs/FEATURE_SPEC.
 docs/            PLAN.md · FEATURE_SPEC.md · DATASET.md
 backend/
   app/           main.py (API) · features.py (spec) · extract.py (MediaPipe offline) · recognition.py ·
-                 train_static.py · registry.py · text_plan.py · clipstore.py · content.py (hints) · config.py · db.py
+                 train_static.py · registry.py · text_plan.py · clipstore.py · content.py (hints) · config.py · db.py ·
+                 vocabulary.py (50 words, gloss matching) · remote_zip.py (HTTP-range zip reader)
   app/legacy/    old synthetic templates, v0 features, v0 DTW (dev fallback only)
   migrations/    Alembic (0001 legacy baseline, 0002 coach schema)
-  scripts/       download_models · train_alphabet · record_cli · seed_dev_synthetic · datasets/ (ingest_*)
+  scripts/       download_models · train_alphabet · record_cli · build_reference_videos · dataset_report ·
+                 seed_dev_synthetic · datasets/ (inspect_asl_citizen, ingest_*)
   tests/         pytest suite
 frontend/src/
   lib/           features.js (spec) · vision.js (MediaPipe) · staticModel.js · segmenter.js · identity.js

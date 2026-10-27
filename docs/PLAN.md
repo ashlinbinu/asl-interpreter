@@ -1,10 +1,12 @@
 # Handspeak → ASL learning coach: audit and implementation plan
 
 Status (2026-10-27), on branch `feature/learning-coach`:
-- **P0 done.** 39 pytest tests pass, including exact Python↔JS feature parity.
+- **P0 done.** Python↔JS feature parity is tested exactly.
 - **P1 code-complete. Its quality gates are not yet measured,** because no real multi-signer alphabet data exists
-  yet (ASK-2). The full recorder → train → serve loop was verified end to end on scratch data.
-- P2 onward waits for the answers in [§6 Open questions](#6-open-questions-ask).
+  yet. The full recorder → train → serve loop was verified end to end on scratch data. **Change of plan:** the
+  alphabet will be built from video, not photos ([§7](#7-alphabet-from-video)).
+- **P2 (ASL Citizen word pipeline) code-complete,** tested on a fake archive (50 tests pass). Nothing has been
+  downloaded: the inspection and the ingest wait for your OK ([§6](#6-open-questions-ask)).
 
 ---
 
@@ -34,7 +36,7 @@ Local data found: `PYTHON/Data/A..Z` (10,676 JPEGs). The DB holds 26 synthetic l
 5. **Recognition "fusion"** adds 0.5×HOG % to 0.5×DTW %, which are unrelated scales, keyed by upper-cased label.
 6. **Camera** records a fixed 3 s after a click and sends only hands, with no timestamps, handedness or image size.
 7. **Infra.** No tests (`test_system.py` hard-codes `c:\Users\hp\...\Data\A\1.jpg`, and so does `train_and_seed.py --data-dir`). `create_all` at import means no migration path. CORS is `*`, there's no payload limit, and every sign's frames are loaded at import, including on the test path. `ingest_how2sign.py` imports `app.main` (which triggers a DB load) just for `norm`.
-8. **Environment constraints.** The repo lives in **OneDrive** and C: has **≈9 GB free**. Large datasets must live outside OneDrive (configurable store dir) and must not be downloaded whole. ffmpeg isn't installed (use the `imageio-ffmpeg` wheel). Python 3.12.10 venv with mediapipe 0.10.14, numpy 2.5, scikit-learn 1.9. Node 22.
+8. **Environment constraints.** The repo lives in **OneDrive** and C: has **≈9 GB free**. The same NVMe SSD also has partitions **D: (145 GB free) and E: (146 GB free)**, which OneDrive doesn't sync. Large datasets go to `HANDSPEAK_STORE_DIR` on D:, and are still fetched selectively rather than whole. ffmpeg isn't installed (use the `imageio-ffmpeg` wheel). Python 3.12.10 venv with mediapipe 0.10.14, numpy 2.5, scikit-learn 1.9. Node 22.
 
 ---
 
@@ -89,12 +91,19 @@ Each phase ends with the pytest suite passing, a summary, and a commit on the fe
 - **Gate:** signer-held-out alphabet accuracy ≥95% and a live test ≥90% on the user's own recordings. **This can't be measured until real multi-signer data is ingested (see ASK-2).** The phase is "code-complete" until then, not "done".
 
 ### P2: word data + reference videos
-- `scripts/datasets/ingest_asl_citizen.py`: reads only the selected glosses' clips from the remote zip with HTTP range requests (`remotezip`), so only about 1 GB of the 42.8 GB is downloaded. Uses the official signer splits.
+Implemented (code + tests on a fake archive; nothing downloaded yet):
+- `app/remote_zip.py`: seekable HTTP-range file for stdlib `zipfile` (no new dependency). It refuses servers that ignore `Range` before reading any body, and enforces a byte budget.
+- `scripts/datasets/inspect_asl_citizen.py`: reads only the zip index + `splits/{train,val,test}.csv` (est. ~10 MB of the 45.9 GB). Reports per-gloss clips/signers by split, letter glosses A–Z, coverage of the 50 words, and the exact MB an ingest would transfer.
+- `scripts/datasets/ingest_asl_citizen.py`: fetches only the chosen glosses' videos, extracts landmarks in parallel (`--workers`), keeps the official signer split, license and attribution per clip. `--dry-run`, `--max-gb` cap, resumable.
+- `scripts/build_reference_videos.py`: one canonical clip per sign, chosen from **training-split** signers by capture quality. Copied to `<store>/media/videos/<sign_id>/`. Non-H.264 files are reported (re-encoding moves to P4).
+- `scripts/dataset_report.py --write-docs`: regenerates the counts in `docs/DATASET.md`.
+- Estimated runtime: ~1.4 s model load + 50–90 ms/frame per clip, so ~20 min for ~1,500 clips with 6 workers (12 logical CPUs).
+
+Still to do in P2:
 - `scripts/datasets/ingest_wlasl.py`: downloader that skips dead URLs, trims to the annotated frame range, and reports coverage per gloss. Keeps C-UDA attribution.
 - `scripts/datasets/ingest_islr.py` (optional): maps Kaggle ISLR's 543-point Holistic parquet layout (face 0–467, left hand 468–488, pose 489–521, right hand 522–542; labels already from the signer's view) into `RawFrame`.
-- `scripts/build_reference_videos.py`: picks the cleanest front-view clip per sign (detection rate, centring, steadiness) and re-encodes it to H.264 ≤480p, trimmed, `+faststart`, via `imageio-ffmpeg`.
-- Word recorder prompts use the confirmed vocabulary. `docs/DATASET.md` lists vocabulary, per-class/per-signer counts, licenses and detection rates.
-- `GET /api/signs?has_video=`, `GET /api/signs/{id}` with `reference_video_url`, attribution and license. `/media` static with Range.
+- Word recorder prompts use the confirmed vocabulary.
+- Already in place from P1: `GET /api/signs?has_video=`, `GET /api/signs/{id}` with `reference_video_url`, attribution and license; `/media` static with Range.
 
 ### P3: dynamic model, scoring, hints
 - `scripts/train_words.py` (PyTorch): 1D-CNN baseline, BiGRU, optional Transformer; signer-split; label smoothing, class-balanced sampling, augmentation (rotation/scale/translation, mirror with consistent handedness swap, time-warp, landmark dropout/noise). Temperature scaling, "none" rejection threshold. ONNX export with `metrics.json`.
@@ -131,7 +140,7 @@ Pairs: MOTHER/FATHER (chin vs forehead), EAT/HOME (mouth vs mouth→cheek), HAPP
 | Risk | Impact | Mitigation |
 |---|---|---|
 | **Alphabet data**: local set unusable. Kaggle ASL Alphabet is one signer and needs a Kaggle token. Multi-signer static sets (Surrey/Massey) may be hard to obtain. | P1 gate unmeasurable | Recorder in P1; leave-signer-out once ≥2 signers; honest "within-signer" label otherwise. |
-| **Disk**: ~9 GB free on C:, repo in OneDrive | Can't hold ASL Citizen; OneDrive would sync GBs | Partial remote-zip ingest; `HANDSPEAK_STORE_DIR` outside OneDrive; data dirs git-ignored. |
+| **Disk**: ~9 GB free on C:, repo in OneDrive | OneDrive would sync GBs; C: would fill | `HANDSPEAK_STORE_DIR` on D: (145 GB free); partial remote-zip ingest with a `--max-gb` cap; data dirs git-ignored. |
 | **Licenses**: ASL Citizen (MS research, non-commercial), WLASL (C-UDA, computational/academic only), How2Sign (CC BY-NC 4.0), Kaggle sets (verify per page) | Can't be deployed commercially or publicly as-is | License + attribution stored per clip and shown in the UI. README states non-commercial. Own recordings are unrestricted. |
 | Dataset video → webcam domain gap (lighting, framing, fps) | Lower live accuracy than offline | Train with own recordings; augmentation; report live metrics separately. |
 | Pose-derived face anchors are approximate | Location hints off by ~½ face height | Hints use coarse regions (forehead/eyes/mouth/chin/cheek/chest). Face mesh in spec v2 if needed. |
@@ -143,7 +152,65 @@ Pairs: MOTHER/FATHER (chin vs forehead), EAT/HOME (mouth vs mouth→cheek), HAPP
 
 ## 6. Open questions (ASK)
 
-1. **ASK-1, vocabulary:** approve the 50 words in §4, or edit them.
-2. **ASK-2, alphabet data:** can you (a) download Kaggle *ASL Alphabet* (`grassknoted/asl-alphabet`, needs your Kaggle API token; please confirm its license on the page) and (b) record yourself plus 1–2 other people with the new recorder? I recommend **retiring `PYTHON/Data`** (unusable, see §1.2-2).
-3. **ASK-3, word data:** OK to fetch the selected ASL Citizen clips (about 1 GB, non-commercial license, requires accepting Microsoft's terms) and the WLASL subset? Where should `HANDSPEAK_STORE_DIR` point (a folder outside OneDrive, ideally on a drive with ≥10 GB free)?
-4. **ASK-4, PyTorch:** OK to install CPU PyTorch in the venv for P3 training?
+Resolved: the vocabulary is the 50 words in §4 (subject to the dataset check), `PYTHON/Data` is retired, the
+alphabet comes from video with Kaggle photos as train-only supplement (§7).
+
+1. **ASK-A, ASL Citizen inspection:** OK to read the zip index + split CSVs (~10 MB, no videos)? This uses the
+   dataset, so it means accepting Microsoft's non-commercial research license.
+2. **ASK-B, store location:** `HANDSPEAK_STORE_DIR=D:\handspeak-data` (written to `backend/.env`)?
+3. **ASK-C, ASL Citizen ingest:** after the inspection report, OK to fetch the vocabulary clips (estimate ~1 GB;
+   the report gives the exact figure)?
+4. **ASK-D, ChicagoFSVid:** OK to download the 1.7 GB archive to D:? It states no license, so it stays research-only
+   and local. Its README decides how the letter-peak annotations are read.
+5. **ASK-4, PyTorch:** OK to install CPU PyTorch in the venv for P3 training?
+
+---
+
+## 7. Alphabet from video
+
+Goal: all 26 letters from **multi-signer video**. 24 static letters come from hold frames, and J and Z are treated
+as dynamic signs. Evaluation is by held-out signer.
+
+### 7.1 Sources, in order of use
+
+| Source | Letters | Signers | Role |
+|---|---|---|---|
+| Own recordings (Record page saves WebM + landmarks) | A–Z incl. J, Z | each person you record, with consent | train + **primary test** (closest to live use) |
+| ChicagoFSVid isolated letters | per signer (count unknown until the archive is read) | 4 | train / test by signer |
+| ChicagoFSVid letters inside words (21,453 annotated peaks) | all 26, coarticulated | same 4 | **train only** (variety), reported separately |
+| ASL Citizen letter glosses, if the inspection finds any | ≤26 | up to 52 | train / test using the official signer split |
+| Kaggle ASL Alphabet photos | 24 static | 1 | **supplementary static train only**, never val/test |
+| ChicagoFSWild(+), FSboard | phrases without letter timing | 160–260 / 147 | not now: would need forced alignment with a trained model |
+
+### 7.2 Hold-frame extraction (`app/holds.py`, new)
+1. MediaPipe per frame → RawFrames (`extract.video_frames`, unchanged).
+2. Per frame: wrist speed in body units (the segmenter's measure) and **shape speed** = ‖Δ `static_vector`‖ / Δt on the
+   dominant hand.
+3. A **hold** is a run where both speeds are below thresholds for ≥120 ms with the hand detected throughout.
+   Thresholds are fitted on own recordings (known holds) and fixed before any test-set use.
+4. Isolated-letter clips: the longest hold; up to 5 frames sampled from its middle 60%. All frames of one clip share a
+   group id, so augmentation and splits can't leak near-duplicates.
+5. Annotated peaks (ChicagoFSVid): peak ± 2 frames at 60 fps, kept only if they pass the hold test.
+6. Quality gates: hand score ≥0.7, not touching the frame edge, stable handedness. Per-letter yield is reported.
+
+### 7.3 J and Z
+Each is a whole motion segment: the isolated clip trimmed by the segmenter's motion start/stop, or, inside words, from
+the midpoint after the previous letter's peak to the midpoint before the next. They become T=32 sequences for the
+dynamic model (P3) next to the words. Until then, Practice shows their reference and says "not scored yet".
+
+### 7.4 Splits, metrics and the "unverified" rule
+- Groups = `source:signer`. Test signers come from video sources only.
+- ≥5 video signers: a fixed signer split. 3–4: leave-one-signer-out, reported as mean and range.
+- Photo sources carry `supplementary=true` and are never used for validation or test. Metrics are reported with and
+  without them.
+- `metrics.json` gets `verified = signer-held-out protocol and ≥3 distinct video signers`. Below that, `/api/status`
+  and the UI badge say **"unverified"** next to any number.
+- Reported separately: per source, per signer, and own recordings (the live ≥90% gate).
+
+### 7.5 Implementation steps (after ASK-D, or with own recordings alone)
+1. `train_static.py`: `supplementary` flag, video-only validation/test, `verified` in metrics, badge text.
+2. `app/holds.py` + tests on synthetic hold/transition clips.
+3. `scripts/datasets/ingest_chicago_fsvid.py` (format from its README), and `ingest_recordings.py` for own videos
+   through the same hold extraction.
+4. `ingest_alphabet_images.py --supplementary` for Kaggle.
+5. J/Z sequences go into the P3 dynamic dataset.

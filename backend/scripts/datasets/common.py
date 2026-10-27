@@ -23,6 +23,18 @@ def find_sign(s, label: str, category: str | None = None):
     return None
 
 
+def upsert_word(s, word: str, source: str):
+    """The vocabulary row for a word (reusing a legacy row with the same label, never a user sign)."""
+    from app.vocabulary import gloss_of
+    row = next((r for r in s.query(Sign) if r.category != "user" and norm(r.label) == norm(word)), None)
+    if row is None:
+        row = Sign(label=word, source=source)
+        s.add(row)
+    row.category, row.kind, row.gloss = "word", "dynamic", gloss_of(word)
+    s.flush()
+    return row
+
+
 def existing_keys(source: str) -> set:
     """landmarks_path values already ingested for a source (makes re-runs incremental)."""
     with Session() as s:
