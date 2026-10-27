@@ -55,7 +55,7 @@ python -m uvicorn app.main:app --reload   # http://127.0.0.1:8000  (docs at /doc
 # 2. Frontend (second terminal)
 cd frontend
 npm install
-npm run dev                           # http://localhost:5173
+npm run dev                           # http://127.0.0.1:5173
 ```
 
 `run_all.bat` starts both after installation, and `run_tests.bat` runs the test suite.
