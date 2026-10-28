@@ -1,0 +1,7 @@
+# Training-only extras. The app itself (API + inference) does not need these: exported models run in numpy.
+#   python -m pip install -r requirements-train.txt --extra-index-url https://download.pytorch.org/whl/cpu
+# (the extra index provides the ~200 MB CPU-only torch wheel instead of the multi-GB CUDA build)
+-r requirements.txt
+torch==2.14.*        # scripts/train_words.py (1D-CNN / BiGRU word model)
+h5py==3.*            # scripts/datasets/ingest_chicago_fsvid.py (MATLAB 7.3 files)
+imageio-ffmpeg==0.7.*  # scripts/datasets/ingest_commons_alphabet.py (cuts and encodes H.264 letter clips)

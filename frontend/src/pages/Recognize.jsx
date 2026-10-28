@@ -1,164 +1,143 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Camera from "../components/Camera.jsx";
-import SkeletonPlayer from "../components/SkeletonPlayer.jsx";
-import { api } from "../api.js";
+import ReferencePanel from "../components/ReferencePanel.jsx";
+import { api, mediaUrl } from "../api.js";
+import { useLiveLetters } from "../lib/useLiveLetters.js";
+import { useLiveWords } from "../lib/useLiveWords.js";
+import { speak } from "../lib/speech.js";
 
-export default function Recognize() {
-  const [mode, setMode] = useState("webcam"); // "webcam" or "upload"
-  const [matches, setMatches] = useState(null);
-  const [method, setMethod] = useState("");
-  const [ref, setRef] = useState(null);
+/** Small real-media preview for a match: video (plays on hover), else photo, else a "no video" mark. */
+function Thumb({ s, label }) {
+  if (s?.reference_video_url) {
+    return <video className="thumb" src={`${mediaUrl(s.reference_video_url)}#t=0.8`} muted playsInline loop preload="metadata"
+                  aria-label={`Reference video for ${label}`} onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+                  onMouseLeave={(e) => e.currentTarget.pause()} />;
+  }
+  if (s?.reference_image_url) return <img className="thumb" src={mediaUrl(s.reference_image_url)} alt={`Handshape for ${label}`} />;
+  return <span className="thumb none" title="No video available yet">no video</span>;
+}
+
+function Matches({ matches, rejectThreshold, onLearn, media }) {
+  if (!matches?.length) return null;
+  const unsure = matches[0].confidence < rejectThreshold;
+  return (
+    <div>
+      {unsure && <p className="muted">Not sure yet: hold the handshape steady, facing the camera.</p>}
+      {matches.map((m, i) => (
+        <div key={m.label} className="row match">
+          <Thumb s={media[m.label.toLowerCase()] || m} label={m.label} />
+          <span className={i === 0 && !unsure ? "best" : ""}>{m.label}</span>
+          <div className="bar" aria-hidden="true"><i style={{ width: `${Math.round(m.confidence * 100)}%` }} /></div>
+          <b>{Math.round(m.confidence * 100)}%</b>
+          <button className="chip small" onClick={() => onLearn(m.sign_id ?? media[m.label.toLowerCase()]?.id, m.label)}
+                  aria-label={`Learn the sign ${m.label}`}>Learn</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function Recognize({ go }) {
+  const [mode, setMode] = useState("live");
+  const live = useLiveLetters(mode === "live");
+  const liveWords = useLiveWords(mode === "words");
+  const [server, setServer] = useState(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [previewImg, setPreviewImg] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [focus, setFocus] = useState(null);
+  const [media, setMedia] = useState({});   // lower-case label -> sign (id + reference video/photo urls)
 
-  const speak = (text) => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.9;
-      window.speechSynthesis.speak(u);
-    }
-  };
+  useEffect(() => {
+    Promise.all([api.signs("", "alphabet"), api.signs("", "word")])
+      .then((ls) => setMedia(Object.fromEntries(ls.flat().map((s) => [s.label.toLowerCase(), s])))).catch(() => {});
+  }, []);
 
-  const onCapture = async (data) => {
+  const wordsLive = mode === "words" && liveWords.top.length > 0;
+  const matches = mode === "live" ? live.top : wordsLive ? liveWords.top : server?.matches;
+  const threshold = mode === "live" ? live.model?.rejectThreshold ?? 0
+    : wordsLive ? liveWords.model?.rejectThreshold ?? 0 : server?.rejected ? 2 : 0;
+  const learn = (signId, label) => setFocus({ id: signId, label });
+  const switchMode = (m) => { setMode(m); setServer(null); setErr(""); };
+
+  const onSegment = async ({ frames }) => {
     setErr("");
-    setRef(null);
-    setLoading(true);
     try {
-      // data is { frames, image }
-      const res = await api.recognize(data);
-      setMatches(res.matches || []);
-      setMethod(res.method || "recognition");
-      if (res.matches?.[0]) {
-        // Auto-fetch reference skeleton if sign exists in database
-        try {
-          const signs = await api.signs(res.matches[0].label);
-          const hit = signs.find((s) => s.label.toUpperCase() === res.matches[0].label.toUpperCase());
-          if (hit) {
-            setRef(await api.sign(hit.id));
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+      setServer(await api.recognize({ frames, mode: mode === "words" ? "word" : "alphabet" }));
+    } catch (e) { setErr(e.message); }
   };
 
-  const handleFileUpload = (e) => {
+  const onFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setErr("");
-    setRef(null);
-    setLoading(true);
-
+    setErr(""); setLoading(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const base64 = ev.target.result;
-      setPreviewImg(base64);
+      setPreview(ev.target.result);
       try {
-        const res = await api.recognize({ image: base64 });
-        setMatches(res.matches || []);
-        setMethod(res.method || "image_classifier");
-        if (res.matches?.[0]) {
-          try {
-            const signs = await api.signs(res.matches[0].label);
-            const hit = signs.find((s) => s.label.toUpperCase() === res.matches[0].label.toUpperCase());
-            if (hit) setRef(await api.sign(hit.id));
-          } catch (_) {}
-        }
-      } catch (err) {
-        setErr(err.message);
-      } finally {
-        setLoading(false);
-      }
+        setServer(await api.recognize({ image: ev.target.result, mode: "alphabet" }));
+      } catch (er) { setErr(er.message); setServer(null); } finally { setLoading(false); }
     };
     reader.readAsDataURL(file);
   };
 
-  const topMatch = matches?.[0];
-
   return (
     <section className="two">
       <div>
-        <h2>Sign Recognition</h2>
-        <div className="subnav">
-          <button className={mode === "webcam" ? "on" : ""} onClick={() => setMode("webcam")}>
-            📹 Live Camera
-          </button>
-          <button className={mode === "upload" ? "on" : ""} onClick={() => setMode("upload")}>
-            📁 Image Upload / Dataset
-          </button>
+        <h2>Sign → text</h2>
+        <div className="subnav" role="tablist">
+          {[["live", "Letters (live)"], ["words", "Words (live)"], ["upload", "Image upload"]].map(([id, name]) => (
+            <button key={id} role="tab" aria-selected={mode === id} className={mode === id ? "on" : ""}
+                    onClick={() => switchMode(id)}>{name}</button>
+          ))}
         </div>
-
-        {mode === "webcam" ? (
+        {mode === "words" ? (
+          <p className="banner">Sign one of the {liveWords.model?.classes.length ?? ""} vocabulary words, then pause. The clip is matched by a model trained on
+            ASL Citizen signers; its held-out-signer accuracy is in the header badge. J and Z aren't recognised yet.</p>
+        ) : (
+          <p className="banner">Static fingerspelling letters are recognised in the browser. Moving letters (J, Z) need
+            motion data that isn't available yet.</p>
+        )}
+        {mode === "live" ? (
           <>
-            <p className="muted">Make your sign in front of the camera, press record, and get instant interpretation.</p>
-            <Camera onCapture={onCapture} />
+            {live.error && <p className="error">{live.error}. Train it first: see README "Train the alphabet model".</p>}
+            <Camera mode="auto" kind="static" onFrame={live.onFrame} onSegment={onSegment} />
+            {live.ready && <p className="muted small">In-browser model {live.model.version} · {live.latencyMs.toFixed(1)} ms per update</p>}
+          </>
+        ) : mode === "words" ? (
+          <>
+            {liveWords.error && <p className="error">{liveWords.error}. Train it first: python -m scripts.train_words</p>}
+            <Camera key="words" mode="auto" kind="dynamic" onFrame={liveWords.onFrame} onSegment={onSegment} />
+            {liveWords.ready && <p className="muted small">In-browser word model {liveWords.model.version} · {liveWords.latencyMs.toFixed(0)} ms per update</p>}
           </>
         ) : (
           <div>
-            <p className="muted">Upload an ASL sign image or sample from the dataset to test the trained AI classifier.</p>
-            <label className="dropzone" style={{ display: "block" }}>
-              <input type="file" accept="image/*" onChange={handleFileUpload} style={{ display: "none" }} />
-              <p style={{ margin: "0.5rem 0", fontWeight: 600 }}>Click to select an image or drag & drop</p>
-              <span className="muted" style={{ fontSize: "0.85rem" }}>Supports JPG, PNG (e.g. from Desktop/PYTHON/Data)</span>
+            <label className="dropzone">
+              <input type="file" accept="image/*" onChange={onFile} className="sr-only" />
+              <p><strong>Choose a photo of a fingerspelled letter</strong></p>
+              <span className="muted small">Landmarks are extracted on the server, then the same landmark model is used.</span>
             </label>
-            {previewImg && (
-              <div style={{ marginTop: "1rem" }}>
-                <p className="muted">Uploaded Image:</p>
-                <img src={previewImg} alt="Uploaded sign" style={{ maxWidth: "200px", borderRadius: "8px", border: "1px solid var(--line)" }} />
-              </div>
-            )}
+            {preview && <img src={preview} alt="Uploaded sign" className="preview" />}
           </div>
         )}
       </div>
 
       <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2>Interpretation Results</h2>
-          {topMatch && (
-            <button className="speak-btn" onClick={() => speak(topMatch.label)} title="Speak with voice">
-              🔊 Speak "{topMatch.label}"
-            </button>
-          )}
+        <div className="head-row">
+          <h2>Top matches</h2>
+          {matches?.[0] && <button className="speak-btn" onClick={() => speak(matches[0].label)}>🔊 Speak "{matches[0].label}"</button>}
         </div>
-
-        {loading && <p className="note">Processing sign recognition...</p>}
+        {loading && <p className="note">Extracting landmarks…</p>}
         {err && <p className="error">{err}</p>}
-
-        {!matches && !loading && !err && (
-          <p className="muted">Your recognition matches and confidence scores will appear here.</p>
+        {!matches?.length && !loading && !err && <p className="muted">Matches and confidence appear here.</p>}
+        <Matches matches={matches} rejectThreshold={threshold} onLearn={learn} media={media} />
+        {mode !== "upload" && server?.matches?.[0] && (
+          <p className="muted small">Last auto-captured: <b>{server.matches[0].label}</b> ({Math.round(server.matches[0].confidence * 100)}%, server check)</p>
         )}
-
-        {matches && matches.length === 0 && (
-          <p className="muted">No match found. Please position hand clearly in frame.</p>
-        )}
-
-        {matches?.map((m, i) => (
-          <div key={m.label || i} className="row">
-            <span className={i === 0 ? "best" : ""}>
-              {m.label} {i === 0 && "⭐"}
-            </span>
-            <div className="bar">
-              <i style={{ width: `${Math.min(m.score, 100)}%` }} />
-            </div>
-            <b>{m.score}%</b>
-          </div>
-        ))}
-
-        {method && (
-          <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.8rem" }}>
-            Engine: {method === "image_classifier" ? "⚡ AI Linear Classifier (HOG)" : method === "dtw_landmarks" ? "📐 3D Landmark DTW" : "⚡ Hybrid Fusion"}
-          </p>
-        )}
-
-        {ref && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <p className="muted">Reference animated sign for <b>{ref.label}</b>:</p>
-            <SkeletonPlayer frames={ref.frames} />
+        {focus?.id && (
+          <div className="card">
+            <ReferencePanel signId={focus.id} compact />
+            <button className="btn" onClick={() => go("practice", focus.id)}>Practise {focus.label}</button>
           </div>
         )}
       </div>

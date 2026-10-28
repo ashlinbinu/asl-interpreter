@@ -1,108 +1,78 @@
 import { useState } from "react";
-import SkeletonPlayer from "../components/SkeletonPlayer.jsx";
+import ReferencePanel from "../components/ReferencePanel.jsx";
+import VideoSequencePlayer from "../components/VideoSequencePlayer.jsx";
 import { api } from "../api.js";
+import { speak } from "../lib/speech.js";
 
-const QUICK_EXAMPLES = ["hello", "thank you", "please", "yes", "cat", "ASL", "water"];
+const EXAMPLES = ["hello", "thank you", "please help me", "my mother is happy", "where is the bathroom"];
 
-export default function TextToSign() {
+export default function TextToSign({ go }) {
   const [text, setText] = useState("");
+  const [normalize, setNormalize] = useState(true);
   const [out, setOut] = useState(null);
+  const [active, setActive] = useState({ entry: 0, letter: undefined });
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const go = async (inputStr) => {
-    const query = inputStr !== undefined ? inputStr : text;
-    if (!query.trim()) return;
-    setErr("");
-    setLoading(true);
+  const run = async (q = text, n = normalize) => {
+    if (!q.trim()) return;
+    setErr(""); setLoading(true);
     try {
-      const res = await api.textToSign(query);
-      setOut(res);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+      setOut(await api.textToSign(q, n));
+      setActive({ entry: 0, letter: undefined });
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
   };
 
-  const speak = () => {
-    if ("speechSynthesis" in window && text.trim()) {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-    }
-  };
+  const entry = out?.entries?.[active.entry];
+  const signId = entry ? (entry.fingerspelled ? entry.letters[active.letter ?? 0]?.sign_id : entry.sign_id) : null;
+  const changed = (out?.entries || []).filter((e) => e.normalized_from);
 
   return (
-    <section>
-      <h2>Text to Sign Translation</h2>
-      <p className="muted">
-        Type any sentence, word, or name. Known phrases display full sign gestures; unlisted words
-        are automatically fingerspelled letter-by-letter with the canonical ASL alphabet.
-      </p>
-
-      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-        <small className="muted" style={{ alignSelf: "center", marginRight: "0.2rem" }}>Quick try:</small>
-        {QUICK_EXAMPLES.map((ex) => (
-          <button
-            key={ex}
-            className="chip"
-            style={{ fontSize: "0.85rem", padding: "0.25rem 0.75rem" }}
-            onClick={() => {
-              setText(ex);
-              go(ex);
-            }}
-          >
-            {ex}
-          </button>
-        ))}
-      </div>
-
-      <div className="inline">
-        <input
-          value={text}
-          placeholder="Try: 'hello', 'thank you', 'peace', 'my name is alex'"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && go()}
-        />
-        <button className="btn" onClick={() => go()} disabled={!text.trim() || loading}>
-          {loading ? "Translating..." : "Translate"}
-        </button>
-        {out?.signs?.length > 0 && (
-          <button className="btn secondary" onClick={speak} title="Read aloud">
-            🔊
-          </button>
+    <section className="two">
+      <div>
+        <h2>Text → sign</h2>
+        <p className="banner">{out?.note || "Word-by-word glossing, not ASL grammar: real ASL word order and facial grammar differ."}
+          {" "}Unknown words are fingerspelled.</p>
+        <div className="examples">
+          <small className="muted">Try:</small>
+          {EXAMPLES.map((ex) => <button key={ex} className="chip small" onClick={() => { setText(ex); run(ex); }}>{ex}</button>)}
+        </div>
+        <div className="inline">
+          <input value={text} aria-label="Text to sign" placeholder="Type a word or sentence"
+                 onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run()} />
+          <button className="btn" onClick={() => run()} disabled={!text.trim() || loading}>{loading ? "…" : "Show signs"}</button>
+          <button className="btn secondary" onClick={() => speak(text)} aria-label="Read aloud" disabled={!text.trim()}>🔊</button>
+        </div>
+        <label className="inline-check">
+          <input type="checkbox" checked={normalize} onChange={(e) => { setNormalize(e.target.checked); run(text, e.target.checked); }} />
+          {" "}Approximate ASL-style glosses (drop "the", "is", "to"; eating → EAT)
+        </label>
+        {err && <p className="error">{err}</p>}
+        {out && (
+          <>
+            {out.dropped?.length > 0 && <p className="muted small">Not signed: {out.dropped.join(", ")}</p>}
+            {changed.length > 0 && (
+              <p className="muted small">Changed: {changed.map((e) => `${e.normalized_from} → ${e.gloss}`).join(", ")}</p>
+            )}
+            {out.missing?.length > 0 && <p className="muted small">Not available: {out.missing.join(", ")}</p>}
+            <VideoSequencePlayer entries={out.entries} onActive={(e, l) => setActive({ entry: e, letter: l })} />
+          </>
         )}
       </div>
-
-      {err && <p className="error">{err}</p>}
-
-      {out && (
-        <>
-          <div className="grid">
-            {out.signs.map((s, i) => (
-              <figure key={i}>
-                <SkeletonPlayer frames={s.frames} size={220} />
-                <figcaption>
-                  <span>{s.label}</span>
-                  {s.is_fingerspelled && <span className="tag-spell">Letter</span>}
-                </figcaption>
-              </figure>
-            ))}
+      <div>
+        {signId ? (
+          <div className="card">
+            <h3>{entry.fingerspelled ? `Letter ${entry.letters[active.letter ?? 0]?.letter} of ${entry.word.toUpperCase()}` : entry.gloss}</h3>
+            <ReferencePanel signId={signId} compact />
+            <div className="inline">
+              <button className="btn secondary" onClick={() => go("practice", signId)}>Practise this sign</button>
+              {out?.entries?.length > 1 && (
+                <button className="btn secondary" onClick={() => go("practice", null, { sentence: text })}>Practise the sentence</button>
+              )}
+            </div>
           </div>
-
-          {out.signs.length === 0 && (
-            <p className="muted" style={{ marginTop: "1rem" }}>
-              No signs or alphabet characters found for that text.
-            </p>
-          )}
-
-          {out.missing?.length > 0 && (
-            <p className="muted" style={{ marginTop: "1rem" }}>
-              Unrecognized symbols: {out.missing.join(", ")}
-            </p>
-          )}
-        </>
-      )}
+        ) : <p className="muted">Each sign's reference, license and attribution appear here.</p>}
+      </div>
     </section>
   );
 }

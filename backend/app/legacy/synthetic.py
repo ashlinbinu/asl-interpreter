@@ -1,3 +1,7 @@
+"""DEV-ONLY legacy: procedurally generated hand templates. NOT real signing; never a source of truth.
+
+Used only by scripts.seed_dev_synthetic when HANDSPEAK_DEV_SYNTHETIC=1.
+"""
 """Canonical ASL hand landmark definitions for the full 26-letter alphabet (A-Z)
 and common essential vocabulary.
 
