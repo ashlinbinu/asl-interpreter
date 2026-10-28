@@ -92,7 +92,7 @@ export default function Recognize({ go }) {
           ))}
         </div>
         {mode === "words" ? (
-          <p className="banner">Sign one of the 50 vocabulary words, then pause. The clip is matched by a model trained on
+          <p className="banner">Sign one of the {liveWords.model?.classes.length ?? ""} vocabulary words, then pause. The clip is matched by a model trained on
             ASL Citizen signers; its held-out-signer accuracy is in the header badge. J and Z aren't recognised yet.</p>
         ) : (
           <p className="banner">Static fingerspelling letters are recognised in the browser. Moving letters (J, Z) need

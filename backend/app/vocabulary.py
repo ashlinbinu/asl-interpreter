@@ -9,6 +9,7 @@ WORDS = [
     "finish", "want", "need", "where", "what", "who", "how", "why", "again", "stop",
     "go", "come", "home", "school", "work", "teacher", "book", "time", "like", "know",
     "learn", "understand", "happy", "sad", "tired", "hungry", "deaf", "hearing", "bathroom", "sign",
+    "office",                       # added 2026-10-28 on request (ASL Citizen OFFICE: 30 clips, 28 signers)
 ]
 
 # Other spellings of the same English word that a dataset may use. Only used when no exact gloss exists, and

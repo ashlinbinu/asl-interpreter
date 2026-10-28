@@ -6,16 +6,18 @@ Status (2026-10-28), on branch `feature/learning-coach`:
   hand crops (4 signers) plus Kaggle photos as train-only supplement. 75.0% on the held-out signer, leave-one-signer-out
   mean 77.1%; the photos don't improve it (76.8% without). Verification needs ≥3 full-frame video signers.
 - **P2 done.** All 50 words ingested from ASL Citizen (1,554 clips, 48 signers, 855 MB), each with a reference video
-  from a training-split signer.
-- **P3 done.** BiGRU word model: 84.0% top-1, 95.3% top-5, ECE 0.031 on 11 held-out signers; practice-score AUC 0.993.
+  from a training-split signer; *office* added on 2026-10-28 (30 clips, 28 signers). All 26 letters have a real
+  reference video cut from one Wikimedia Commons alphabet video (CC BY-SA 3.0; one signer).
+- **P3 done.** Word model (51 words, CNN chosen on validation): 81.9% top-1, 94.3% top-5, ECE 0.023 on 11 held-out
+  signers; practice-score AUC 0.994. (The 50-word BiGRU before it: 84.0% / 95.3%.)
   DTW runs on numba (identical to the Python loop, ~100x faster). `/api/score` also returns `highlight` (the joints
-  of your hand that differ most), drawn in red on the camera. Signs with recordings but no model (custom signs,
-  self-recorded J/Z) are scored by DTW against their own recordings, calibrated on the same person making a
-  different sign: AUC 0.841 on held-out ASL Citizen signers (proxy; unverified on custom signs). Only signs with no
-  recording at all get "can't be scored yet".
+  of your hand that differ most), drawn in red on the camera. Custom signs are scored by DTW against their own
+  recordings, calibrated on the same person making a different sign: AUC 0.827 on held-out ASL Citizen signers
+  (proxy; unverified on custom signs). Letters are never scored that way: against a letter's reference, a different
+  letter by the same signer scores a median of ~94, so J and Z stay unscored.
 - **P4 and P5 done:** text → sign sequences, sentence practice, Leitner review queue, accessibility, EVALUATION.md.
-- The full test suite passes, including a real-video integration test. **Not done:** J/Z recognition (no multi-signer
-  motion data; they are scored only once you record them) and a manual check in a browser with a webcam.
+- The full test suite passes, including a real-video integration test. **Not done:** J/Z recognition and scoring
+  (needs motion data from several signers) and a manual check in a browser with a webcam.
 
 ---
 

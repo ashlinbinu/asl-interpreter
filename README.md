@@ -9,11 +9,13 @@ practise with live feedback from your webcam, and sign to the camera to get the 
 
 Status: phases P0–P5 of [docs/PLAN.md](docs/PLAN.md) are implemented. Measured results on held-out signers are in
 [docs/EVALUATION.md](docs/EVALUATION.md):
-- **50 words:** 84.0% top-1 and 95.3% top-5 on 11 ASL Citizen signers the model never saw (633 clips).
+- **51 words** (the 50 plus *office*): 81.9% top-1 and 94.3% top-5 on 11 ASL Citizen signers the model never saw
+  (646 clips). Every word has a real signer's reference video.
 - **Alphabet (24 static letters): unverified.** 75.0% on one held-out ChicagoFSVid signer, but those are studio hand
-  crops, not webcam video. No full-frame multi-signer letter video exists yet. J and Z are not recognised.
-- **Custom signs** (and letters you record yourself, e.g. J and Z) are scored by DTW against your own recordings:
-  AUC 0.841 on a proxy (held-out ASL Citizen signers repeating a word vs making another); unverified on your signs.
+  crops, not webcam video. All 26 letters have a real reference video (one signer, Wikimedia Commons, CC BY-SA 3.0).
+  J and Z are shown but not recognised or scored: no multi-signer motion data.
+- **Custom signs** are scored by DTW against your own recordings: AUC 0.827 on a proxy (held-out ASL Citizen signers
+  repeating a word vs making another); unverified on your signs.
 - The browser pages were built and unit-tested, but **not tried with a real webcam** (none was available).
 
 ## How it works
@@ -81,9 +83,13 @@ previous version is upgraded in place: the old templates are kept but tagged `sy
 
    This prints the per-class hand-detection rate and drops images without a detected hand.
    *Images with landmarks already drawn on them (e.g. cvzone exports) don't work: MediaPipe can't detect hands in them.*
-   To show a real photo for each letter (letters have no video), publish the cleanest, centred photo per letter:
+   To show a real photo of each letter's handshape, publish the cleanest, centred photo per letter:
    `python -m scripts.build_reference_images` (uses `DATA_DIR` from `backend/.env`, or pass `--root`). It lists the
    signs that have neither a video nor a photo.
+   For a real **video** of every letter (J and Z included), run
+   `python -m scripts.datasets.ingest_commons_alphabet` (needs `requirements-train.txt` for ffmpeg). It downloads one
+   8 MB alphabet video from Wikimedia Commons (CC BY-SA 3.0, one signer), cuts it per letter, mirrors it to a
+   right-handed view and publishes the clips with attribution.
 3. **Train the alphabet model:**
 
    ```powershell
@@ -97,7 +103,7 @@ previous version is upgraded in place: the old templates are kept but tagged `sy
    each machine trains its own.
 
 4. **Word clips from ASL Citizen** (Microsoft; non-commercial research license, read it first). Only the clips for
-   the 50-word vocabulary are fetched from the 45.9 GB archive, using HTTP range requests:
+   the word vocabulary are fetched from the 45.9 GB archive, using HTTP range requests:
 
    ```powershell
    python -m scripts.datasets.inspect_asl_citizen            # index + split CSVs only, no videos
@@ -191,12 +197,13 @@ backend/
   app/           main.py (API) · features.py (spec) · extract.py (MediaPipe offline) · recognition.py ·
                  train_static.py · holds.py (letter holds in video) · train_words.py · word_model.py (numpy
                  inference + DTW scoring) · registry.py · text_plan.py · clipstore.py · content.py (hints) ·
-                 config.py · db.py · vocabulary.py (50 words, gloss matching) · remote_zip.py (HTTP-range zip reader)
+                 config.py · db.py · vocabulary.py (word list, gloss matching) · remote_zip.py (HTTP-range zip reader)
   app/legacy/    old synthetic templates, v0 features, v0 DTW (dev fallback only)
   migrations/    Alembic (0001 legacy baseline, 0002 coach schema, 0003 reference photos)
   scripts/       download_models · train_alphabet · train_words · evaluation_report · record_cli ·
-                 build_reference_videos · build_reference_images · dataset_report · seed_dev_synthetic ·
-                 datasets/ (inspect_asl_citizen, ingest_asl_citizen, ingest_chicago_fsvid, ingest_alphabet_images, …)
+                 build_reference_videos · build_reference_images · calibrate_own_clip · dataset_report ·
+                 seed_dev_synthetic · datasets/ (inspect_asl_citizen, ingest_asl_citizen, ingest_chicago_fsvid,
+                 ingest_alphabet_images, ingest_commons_alphabet, …)
   tests/         pytest suite
 frontend/src/
   lib/           features.js (spec) · vision.js (MediaPipe) · staticModel.js · wordModel.js · segmenter.js ·

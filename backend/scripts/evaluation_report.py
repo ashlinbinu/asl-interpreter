@@ -73,7 +73,7 @@ def words_section(wm: WordModel):
     per_signer = [v["accuracy"] for v in t["per_signer"].values()]
     worst = sorted(t["per_class"].items(), key=lambda kv: kv[1]["f1"])[:8]
     lines = [
-        "## Words (50-sign vocabulary, ASL Citizen)", "",
+        f"## Words ({len(wm.classes)}-sign vocabulary, ASL Citizen)", "",
         f"Model `{m['version']}` ({m['chosen']}), feature spec {m['feature_spec']}. Protocol: **{m['eval_protocol']}**"
         f" (train {len(m['signers']['train'])} / val {len(m['signers']['val'])} / test {len(m['signers']['test'])}"
         f" signers; clips {m['clips']['train']} / {m['clips']['val']} / {m['clips']['test']}). "
@@ -102,7 +102,7 @@ def words_section(wm: WordModel):
     oc = (wm.own_clip or {}).get("metrics")
     if oc:
         cv = ", ".join(f"{k} {v:.3f}" for k, v in oc["cv_auc_on_fit_signers"].items())
-        lines += ["### Scoring against your own recording (custom signs, self-recorded letters)", "",
+        lines += ["### Scoring against your own recording (custom signs)", "",
                   "Signs with recordings but no trained model are scored by DTW against their own clips. Calibrated "
                   "on the same person making a different sign (`scripts.calibrate_own_clip`), fitted on train + val "
                   f"signers (combination `{oc['combine']}`, chosen by signer-grouped CV AUC: {cv}).", "",
@@ -181,12 +181,14 @@ def main():
               "## Limitations", "",
               "- A learning aid, not a translator. Text → sign is word-by-word glossing; ASL grammar, word order and "
               "non-manual markers (facial grammar) are not modelled.",
-              "- Words: 50 signs, one variant each (the ASL Citizen gloss with most clips; e.g. EAT1, DRINK1). Other "
+              f"- Words: {len(wm.classes) if wm else 0} signs, one variant each (the ASL Citizen gloss with most "
+              "clips; e.g. EAT1, DRINK1). Other "
               "regional or variant forms will score low. Accuracy is for ASL Citizen's webcam recordings; your "
               "camera, lighting and framing can lower it.",
               "- Alphabet: unverified (see above). J and Z are not recognised or scored: no multi-signer motion data.",
-              "- Custom signs and letters you record yourself are scored against your own recordings only "
-              "(unverified; see the proxy test above). A sign with no recording can't be scored.",
+              "- Custom signs are scored against your own recordings only (unverified; see the proxy test above). "
+              "A sign with no recording can't be scored. Letters are never scored this way: against a letter's "
+              "reference, a different letter by the same signer scored a median of ~94 (26 letters of one signer).",
               f"- The practice score's weights were fitted on "
               f"{len(wm.metrics['signers']['val']) if wm else 'the'} validation signers; treat it as an estimate.",
               "- Several datasets are non-commercial or research-only (docs/DATASET.md). Don't deploy publicly or "
