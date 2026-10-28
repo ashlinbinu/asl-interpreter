@@ -57,6 +57,7 @@ function gru(x, [Wih, Whh, bih, bhh], reverse) {
 
 export class WordModel {
   constructor(d) {
+    this.source = d;                     // the model file, e.g. to start the same model in a worker
     this.version = d.version;
     this.classes = d.classes;
     this.temperature = d.temperature;
