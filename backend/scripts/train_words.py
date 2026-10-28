@@ -59,6 +59,15 @@ def load_clips(sources=None, log=print):
     return clips
 
 
+def calibrate_own_clip(out_dir, log=print):
+    """Refit the custom-sign (own recording) calibration for a freshly trained model."""
+    from app.word_model import WordModel
+    from scripts.calibrate_own_clip import calibrate
+    cal = calibrate(WordModel(out_dir), [c for c in load_clips(log=lambda *_: None) if c["source"] == "asl_citizen"],
+                    log=log)
+    (out_dir / "own_clip_calibration.json").write_text(json.dumps(cal, indent=1), encoding="utf-8")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sources", nargs="*")
@@ -82,6 +91,8 @@ def main():
     sc = metrics["scoring"]
     print(f"Scoring AUC (correct vs other sign, test signers): {sc['test_auc']:.3f} "
           f"(probability alone {sc['test_auc_probability_only']:.3f}); per component {sc['test_auc_per_component']}")
+    if any(c["source"] == "asl_citizen" for c in clips):
+        calibrate_own_clip(out)
     print(f"Saved {out}")
 
 

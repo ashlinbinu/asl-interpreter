@@ -17,6 +17,7 @@ from sqlalchemy import func
 
 from . import features as fx
 from . import mediapipe_models
+from .clip_scoring import NoUsableReference, clip_scorer
 from .clipstore import load_clip, quality, save_clip
 from .config import get_settings
 from .content import letter_hint
@@ -248,6 +249,7 @@ def add_sign(body: SignIn):
         _touch_learner(s, body.learner_id)
         s.commit()
         sign_id = row.id
+    clip_scorer.invalidate(sign_id)
     registry.load(settings.dev_synthetic)
     return registry.by_id[sign_id].public()
 
@@ -286,6 +288,7 @@ def delete_sign(sign_id: int):
         s.commit()
     removed = sum(_remove_file(settings.store_dir, p) for p in store) + \
         sum(_remove_file(settings.media_dir, p) for p in media)
+    clip_scorer.invalidate(sign_id)
     registry.load(settings.dev_synthetic)
     return {"deleted": sign_id, "label": label, "clips_removed": len(clips), "files_removed": removed,
             "attempts_kept": kept}
@@ -372,6 +375,8 @@ def score(body: ScoreIn):
         pct = round(float(p[ti]) * 100, 1)
         hints = letter_hint(e.label, pred if pred != e.label.upper() else None)
         out = {"score": pct, "components": {"handshape": pct}, "hints": hints, "feedback": _feedback(pct),
+               "highlight": clip_scorer.letter_highlight(frames, e.id, body.left_handed)
+               if pred != e.label.upper() else None,
                "predicted": pred, "sign_label": e.label, "method": "alphabet_static_probability",
                "model_version": model.version}
     elif models.words is not None and e.kind == "dynamic" and e.label in models.words.classes:
@@ -388,15 +393,30 @@ def score(body: ScoreIn):
             hints.insert(0, f"This looked more like {pred.upper()} than {e.label.upper()}.")
         out = {"score": r["score"], "components": {k: v for k, v in r["components"].items() if v is not None},
                "hints": hints or ["Close match with real signers' productions."], "feedback": _feedback(r["score"]),
-               "predicted": pred, "sign_label": e.label, "method": "words_dtw_components", "model_version": wm.version}
+               "highlight": r["highlight"], "predicted": pred, "sign_label": e.label,
+               "method": "words_dtw_components", "model_version": wm.version}
     elif settings.dev_synthetic and e.legacy_frames:
         pct = _legacy_score(frames, e.legacy_frames)
         out = {"score": pct, "components": {}, "hints": ["DEV ONLY: compared against a synthetic template."],
                "feedback": _feedback(pct), "predicted": None, "sign_label": e.label,
                "method": "legacy_synthetic_dtw", "model_version": None}
     else:
-        raise HTTPException(503, f"No trained scorer for '{e.label}' yet: real reference clips and the dynamic "
-                                 "scorer arrive in phases P2–P3.")
+        # No trained model covers this sign (custom signs, letters you recorded yourself): DTW against its own clips.
+        try:
+            r = clip_scorer.score(frames, e.id, e.label, body.left_handed, models.words)
+        except NoHandError as err:
+            raise HTTPException(422, str(err)) from err
+        except NoUsableReference:
+            where = ("re-record it on “Add a sign”" if e.category == "user"
+                     else "record it on the Record page" + (" (J and Z as 3-second takes)" if e.kind == "dynamic"
+                                                            and e.category == "alphabet" else ""))
+            raise HTTPException(409, f"There is no recording of '{e.label}' to compare with yet, so it can't be "
+                                     f"scored. To practise it with feedback, {where}.") from None
+        own = "your own recording" if e.category == "user" else "the recordings of this sign"
+        out = {"score": r["score"], "components": {k: v for k, v in r["components"].items() if v is not None},
+               "hints": r["hints"] or [f"Close to {own}."], "feedback": _feedback(r["score"]),
+               "highlight": r["highlight"], "predicted": None, "sign_label": e.label,
+               "method": f"{r['method']} (vs {own}; unverified)", "model_version": None}
     if body.save:
         _save_attempt(body.learner_id, e.id, out["score"], out["components"], out["hints"], body.mode,
                       out["model_version"])
@@ -466,6 +486,7 @@ async def add_recording(meta: str = Form(...), landmarks: UploadFile = File(...)
         s.add(clip)
         s.commit()
         cid = clip.id
+    clip_scorer.invalidate(e.id)
     registry.load(settings.dev_synthetic)
     return {"clip_id": cid, "sign_id": e.id, "quality": q}
 

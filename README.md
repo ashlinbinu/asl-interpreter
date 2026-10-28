@@ -12,6 +12,8 @@ Status: phases P0–P5 of [docs/PLAN.md](docs/PLAN.md) are implemented. Measured
 - **50 words:** 84.0% top-1 and 95.3% top-5 on 11 ASL Citizen signers the model never saw (633 clips).
 - **Alphabet (24 static letters): unverified.** 75.0% on one held-out ChicagoFSVid signer, but those are studio hand
   crops, not webcam video. No full-frame multi-signer letter video exists yet. J and Z are not recognised.
+- **Custom signs** (and letters you record yourself, e.g. J and Z) are scored by DTW against your own recordings:
+  AUC 0.841 on a proxy (held-out ASL Citizen signers repeating a word vs making another); unverified on your signs.
 - The browser pages were built and unit-tested, but **not tried with a real webcam** (none was available).
 
 ## How it works
@@ -110,8 +112,13 @@ previous version is upgraded in place: the old templates are kept but tagged `sy
 
    ```powershell
    python -m scripts.train_words          # 1D-CNN vs BiGRU on ASL Citizen's official signer split, ~5-10 min on CPU
+   python -m scripts.calibrate_own_clip   # already run by train_words; re-run only for an older model
    python -m scripts.evaluation_report    # regenerates docs/EVALUATION.md
    ```
+
+   `calibrate_own_clip` calibrates how custom signs (and letters you record yourself) are scored against your own
+   recording: by the same person making a different ASL Citizen sign, with a held-out-signer AUC in
+   EVALUATION.md.
 
 6. **Optional: ChicagoFSVid letter crops** (4 signers, research-only, no license stated). Download
    `home.ttic.edu/~klivescu/chicago-fsvid.tgz` (1.7 GB), extract it, then
@@ -165,7 +172,7 @@ without `requirements-train.txt`, and the integration test without local data an
 | POST | `/signs` | add a custom sign (RawFrames) |
 | DELETE | `/signs/{id}` | delete a custom sign (source `user` only; 403 for built-in signs, 404 if missing); its attempts stay, marked deleted |
 | POST | `/recognize` | `{frames, mode: "alphabet"\|"word"}` or `{image}` → top-k `{label, confidence, sign_id, reference_video_url, reference_image_url}` |
-| POST | `/score` | `{sign_id, frames}` → `{score, components, hints, predicted}` (letters: calibrated probability; words: classifier + DTW components) |
+| POST | `/score` | `{sign_id, frames}` → `{score, components, hints, highlight, predicted}` (letters: calibrated probability; words: classifier + DTW components; signs with recordings but no model, e.g. custom signs: DTW against their own recordings, unverified; no recording: 409 with what to do). `highlight` = `{slot, joints}` of your hand that differ most, or null |
 | POST | `/text-to-sign` | `{text, normalize}` → ordered entries (gloss, sign id, video, attribution, fingerspelling), dropped/changed words |
 | POST | `/recordings` | multipart recorder upload (meta + landmarks JSON + optional video) |
 | GET | `/recordings/summary?signer_id=` | takes per sign for the recorder |

@@ -65,7 +65,7 @@ def test_score_letter_gives_hints(client, trained_alphabet):
     assert good["score"] > body["score"]
 
 
-def test_add_sign_stores_real_reference_and_word_scoring_is_honest(client):
+def test_add_sign_stores_real_reference_and_is_scored_against_it(client):
     frames = synth.sign_clip(seed=11)
     r = client.post("/api/signs", json={"label": "my test sign", "frames": frames, "learner_id": "learner-test-1"})
     assert r.status_code == 200, r.text
@@ -75,8 +75,10 @@ def test_add_sign_stores_real_reference_and_word_scoring_is_honest(client):
     assert detail["reference_landmarks"]["source"] == "user"
     assert len(detail["reference_landmarks"]["frames"]) == len(frames)
     assert "frames" not in detail  # no synthetic fallback unless HANDSPEAK_DEV_SYNTHETIC=1
+    # No trained model covers a custom sign: it is scored against its own recording (DTW), marked unverified.
     r = client.post("/api/score", json={"sign_id": sid, "frames": frames})
-    assert r.status_code == 503 and "P2" in r.json()["detail"]
+    assert r.status_code == 200, r.text
+    assert "own_clip_dtw" in r.json()["method"] and "unverified" in r.json()["method"]
 
 
 def test_text_to_sign_entries_and_fingerspelling(client):

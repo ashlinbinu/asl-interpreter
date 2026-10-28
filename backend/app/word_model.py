@@ -10,11 +10,18 @@ import numpy as np
 
 from . import features as fx
 
+try:
+    from numba import njit
+except ImportError:          # optional speed-up; the same loop runs in plain Python
+    njit = None
+
 COMPONENTS = ("handshape", "orientation", "location", "movement", "two_hand")
 BAND = 6                       # Sakoe-Chiba band (frames of the T=32 sequence)
 WRIST = slice(94, 96)          # dominant-hand wrist, body coords (FEATURE_SPEC §7)
 VEL = slice(122, 124)          # dominant-hand wrist velocity
 SECOND_HAND = fx.HAND          # non-dominant present flag
+TOP_JOINTS = 3                 # joints highlighted on the learner's hand when the handshape is weak
+WEAK = 50                      # component percentile below which it counts as weak
 
 
 def _relu(x):
@@ -90,15 +97,26 @@ def score_vector(p_target: float, pct: dict) -> list[float]:
     return [float(np.log(p / (1 - p)))] + [(pct[g] or 0) / 100 for g in COMPONENTS]
 
 
-def dtw_path(a, b, band=BAND):
-    """Banded DTW between (T, D) sequences -> (path [(i, j)], mean step cost)."""
-    n, m = len(a), len(b)
-    d = np.sqrt(((a[:, None, :] - b[None, :, :]) ** 2).sum(-1))
+def _dtw_cost_py(d, band):
+    """Accumulated cost matrix (n+1, m+1) of banded DTW over a frame-distance matrix d."""
+    n, m = d.shape
     c = np.full((n + 1, m + 1), np.inf)
     c[0, 0] = 0.0
     for i in range(1, n + 1):
         for j in range(max(1, i - band), min(m, i + band) + 1):
             c[i, j] = d[i - 1, j - 1] + min(c[i - 1, j], c[i, j - 1], c[i - 1, j - 1])
+    return c
+
+
+_dtw_cost = njit(cache=True)(_dtw_cost_py) if njit else _dtw_cost_py
+DTW_BACKEND = "numba" if njit else "python"
+
+
+def dtw_path(a, b, band=BAND):
+    """Banded DTW between (T, D) sequences -> (path [(i, j)], mean step cost)."""
+    n, m = len(a), len(b)
+    d = np.sqrt(((a[:, None, :] - b[None, :, :]) ** 2).sum(-1))
+    c = _dtw_cost(np.ascontiguousarray(d, dtype=np.float64), int(band))
     i, j, path = n, m, []
     while i > 0 and j > 0:
         path.append((i - 1, j - 1))
@@ -117,6 +135,37 @@ def component_distances(a, b, path) -> dict:
         diff = a[ia][:, idx] - b[ib][:, idx]
         out[g] = float(np.sqrt((diff ** 2).sum(1)).mean() / np.sqrt(len(idx)))
     return out
+
+
+def joint_errors(a, b, path, slot=0):
+    """Mean distance per hand joint (hand-size units) between raw sequences along a DTW path, for one hand slot
+    (0 = dominant); None when that hand is missing in either sequence."""
+    off = slot * fx.HAND
+    pairs = [(i, j) for i, j in path if a[i, off] > 0.5 and b[j, off] > 0.5]
+    if not pairs:
+        return None
+    ia, ib = np.array(pairs).T
+    pa = a[ia, off + 1:off + 64].reshape(-1, 21, 3)
+    pb = b[ib, off + 1:off + 64].reshape(-1, 21, 3)
+    return np.linalg.norm(pa - pb, axis=2).mean(0)
+
+
+def joints_to_highlight(err, slot, top=TOP_JOINTS):
+    """{slot, joints, component} for the Camera overlay: the joints (never the wrist) that differ most."""
+    if err is None:
+        return None
+    return {"slot": int(slot), "joints": sorted(int(k) + 1 for k in np.argsort(-err[1:])[:top]),
+            "component": "handshape"}
+
+
+def highlight_from(a, b, path):
+    """Highlight the hand (dominant or second) whose joints differ most from the aligned reference."""
+    errs = [(slot, joint_errors(a, b, path, slot)) for slot in (0, 1)]
+    errs = [(s, e) for s, e in errs if e is not None]
+    if not errs:
+        return None
+    slot, err = max(errs, key=lambda se: se[1][1:].mean())
+    return joints_to_highlight(err, slot)
 
 
 class References:
@@ -203,6 +252,8 @@ class WordModel:
                                d["component_stats"], self.net)
         mp = path / "metrics.json"
         self.metrics = json.loads(mp.read_text(encoding="utf-8")) if mp.exists() else {}
+        cp = path / "own_clip_calibration.json"        # scripts.calibrate_own_clip (custom-sign scoring)
+        self.own_clip = json.loads(cp.read_text(encoding="utf-8")) if cp.exists() else None
 
     def sequence(self, frames, left_handed=False):
         seq = fx.to_sequence(frames, left_handed)
@@ -218,8 +269,11 @@ class WordModel:
         """Score 0-100 for `label`: classifier target probability + component similarity vs. real references."""
         p = self.proba_seq(seq) if p is None else p
         pt = float(p[self.classes.index(label)])
-        ri, dists, _ = self.refs.compare(self.net.standardize(seq), label)
+        x = self.net.standardize(seq)
+        ri, dists, _ = self.refs.compare(x, label)
         pct = self.refs.percentiles(label, dists)
+        weak_shape = pct.get("handshape") is not None and pct["handshape"] < WEAK
+        highlight = highlight_from(seq, self.refs.seqs[ri], dtw_path(x, self.refs.std[ri])[0]) if weak_shape else None
         w = self.score_weights
         if w:
             s = 100 * _sigmoid(float(np.dot(w["coef"], score_vector(pt, pct)) + w["intercept"]))
@@ -227,7 +281,8 @@ class WordModel:
             vals = [v for v in pct.values() if v is not None]
             s = 50 * pt + 0.5 * (np.mean(vals) if vals else 0)
         return {"score": round(float(s), 1), "target_probability": round(pt, 4), "components": pct,
-                "hints": hints_for(label, pct, seq, self.refs.seqs[ri]), "reference_signer": self.refs.signers[ri]}
+                "hints": hints_for(label, pct, seq, self.refs.seqs[ri]), "highlight": highlight,
+                "reference_signer": self.refs.signers[ri]}
 
     def summary(self):
         m = self.metrics
@@ -236,4 +291,6 @@ class WordModel:
                 "eval_protocol": m.get("eval_protocol"), "accuracy": t.get("accuracy"),
                 "top5_accuracy": t.get("top5_accuracy"), "macro_f1": t.get("macro_f1"),
                 "test_signers": len(m.get("signers", {}).get("test", [])), "trained_at": m.get("created_at"),
-                "verified": bool(m.get("verified")), "scoring_auc": (m.get("scoring") or {}).get("test_auc")}
+                "verified": bool(m.get("verified")), "scoring_auc": (m.get("scoring") or {}).get("test_auc"),
+                "own_clip_scoring_auc": (self.own_clip or {}).get("metrics", {}).get("test_auc"),
+                "dtw": DTW_BACKEND}

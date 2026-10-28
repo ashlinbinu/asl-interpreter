@@ -148,14 +148,20 @@ export default function Practice({ initialSignId, initialSentence }) {
                 <button className={capture === "hold" ? "on" : ""} onClick={() => setCapture("hold")}>Hold to record</button>
               </div>
             </div>
-            {isMotionLetter && (
-              <p className="banner">{sel.label} is a motion letter. It isn't scored yet: there is no multi-signer motion data
-                for it (record it on the Record page). You can still practise against the reference.</p>
-            )}
-            {isOwnSign && (
-              <p className="banner">Your own signs aren't scored (there is no model for them); practise against your
-                recorded reference.</p>
-            )}
+            {isMotionLetter && (sel.reference_clips > 0 ? (
+              <p className="muted small">{sel.label} is scored against your own recordings of it (DTW per component; an
+                estimate, not verified).</p>
+            ) : (
+              <p className="banner">{sel.label} is a motion letter with no recording yet, so it can't be scored. Record it
+                on the Record page (3-second takes); after that it is scored against your recordings.</p>
+            ))}
+            {isOwnSign && (sel.reference_clips > 0 ? (
+              <p className="muted small">Scored against your own recording: DTW per component (handshape, orientation,
+                location, movement), calibrated on real signers' repeats. An estimate, not verified on your signs.</p>
+            ) : (
+              <p className="banner">This sign has no recording, so it can't be scored. Delete it on “Add a sign” and
+                record it again.</p>
+            ))}
             {isWord && !wordsReady && (
               <p className="banner">Words are scored once the word model is trained
                 (<code>python -m scripts.train_words</code>). You can still practise against the reference.</p>
@@ -165,7 +171,8 @@ export default function Practice({ initialSignId, initialSentence }) {
                 (handshape, palm orientation, location, movement).</p>
             )}
             <Camera mode={capture} kind={isStaticLetter ? "static" : "dynamic"} onFrame={live.onFrame}
-                    onSegment={onSegment} disabled={busy} holdLabel={`Hold to sign "${sel.label}"`} />
+                    onSegment={onSegment} disabled={busy} holdLabel={`Hold to sign "${sel.label}"`}
+                    highlight={res?.highlight} />
             {(isStaticLetter || (isWord && wordsReady && live.ready)) && (
               <div className="live-box" aria-live="polite">
                 {live.error ? <p className="error">{live.error}</p> : (
@@ -189,7 +196,12 @@ export default function Practice({ initialSignId, initialSentence }) {
                 </div>
                 {Object.entries(res.components).map(([k, v]) => <Meter key={k} label={k.replace("_", " ")} value={v / 100} />)}
                 <ul className="hints">{res.hints.map((h) => <li key={h}>{h}</li>)}</ul>
-                <p className="muted small">Estimate from {res.method} ({res.model_version}). Scores are a learning aid, not a certification.</p>
+                {res.highlight && (
+                  <p className="muted small">The joints drawn in red on your hand in the camera differ most from the
+                    reference.</p>
+                )}
+                <p className="muted small">Estimate from {res.method}{res.model_version ? ` (${res.model_version})` : ""}.
+                  Scores are a learning aid, not a certification.</p>
               </div>
             )}
             {attempt && (

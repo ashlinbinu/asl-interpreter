@@ -99,6 +99,19 @@ def words_section(wm: WordModel):
               ", ".join(f"{k} {v:.2f}" for k, v in sc["test_auc_per_component"].items()) +
               ". The components add little ranking power beyond the classifier; they are shown to explain the "
               "score and drive the hints.", ""]
+    oc = (wm.own_clip or {}).get("metrics")
+    if oc:
+        cv = ", ".join(f"{k} {v:.3f}" for k, v in oc["cv_auc_on_fit_signers"].items())
+        lines += ["### Scoring against your own recording (custom signs, self-recorded letters)", "",
+                  "Signs with recordings but no trained model are scored by DTW against their own clips. Calibrated "
+                  "on the same person making a different sign (`scripts.calibrate_own_clip`), fitted on train + val "
+                  f"signers (combination `{oc['combine']}`, chosen by signer-grouped CV AUC: {cv}).", "",
+                  f"Proxy test on held-out ASL Citizen signers, same signer repeating a word vs the same signer making "
+                  f"a different word: **AUC {oc['test_auc']:.3f}** ({oc['test_pairs']['same_sign']} repeat / "
+                  f"{oc['test_pairs']['different_sign']} different-sign pairs); median score "
+                  f"{oc['test_score_median']['same_sign']} vs {oc['test_score_median']['different_sign']}. Single "
+                  "components: " + ", ".join(f"{k} {v:.2f}" for k, v in oc["test_auc_per_component"].items()) +
+                  ". **Unverified on your own custom signs**: no held-out data exists for them.", ""]
     return lines
 
 
@@ -151,11 +164,12 @@ def main():
     lines += ["## Latency (measured on this machine)", ""]
     if wm:
         lat = word_latency(wm)
-        lines += ["| Step | Time |", "|---|---|",
+        from app.word_model import DTW_BACKEND
+        lines += [f"DTW runs on **{DTW_BACKEND}**.", "", "| Step | Time |", "|---|---|",
                   f"| Features for one clip (FEATURE_SPEC, Python; ~{lat['frames_per_clip']:.0f} frames) | "
                   f"{lat['features_ms']:.1f} ms |",
                   f"| Word classification (numpy) | {lat['classify_ms']:.1f} ms |",
-                  f"| Word score incl. DTW vs 5 references (numpy) | {lat['score_ms']:.1f} ms |"]
+                  f"| Word score incl. DTW vs 5 references (numpy; DTW on {DTW_BACKEND}) | {lat['score_ms']:.1f} ms |"]
         if "js_classify_ms" in lat:
             lines.append(f"| Word classification in JavaScript (Node, same code as the browser) | "
                          f"{lat['js_classify_ms']:.1f} ms |")
@@ -171,6 +185,8 @@ def main():
               "regional or variant forms will score low. Accuracy is for ASL Citizen's webcam recordings; your "
               "camera, lighting and framing can lower it.",
               "- Alphabet: unverified (see above). J and Z are not recognised or scored: no multi-signer motion data.",
+              "- Custom signs and letters you record yourself are scored against your own recordings only "
+              "(unverified; see the proxy test above). A sign with no recording can't be scored.",
               f"- The practice score's weights were fitted on "
               f"{len(wm.metrics['signers']['val']) if wm else 'the'} validation signers; treat it as an estimate.",
               "- Several datasets are non-commercial or research-only (docs/DATASET.md). Don't deploy publicly or "

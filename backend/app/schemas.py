@@ -66,10 +66,17 @@ class ScoreIn(BaseModel):
     save: bool = True
 
 
+class Highlight(BaseModel):
+    slot: int = Field(description="0 = dominant hand, 1 = second hand (as drawn by the camera overlay)")
+    joints: list[int] = Field(description="MediaPipe hand joint indices that differ most from the reference")
+    component: str
+
+
 class ScoreOut(BaseModel):
     score: float
     components: dict[str, float]
     hints: list[str]
+    highlight: Optional[Highlight] = None
     feedback: str
     predicted: Optional[str]
     sign_label: str

@@ -1,6 +1,6 @@
 # Handspeak → ASL learning coach: audit and implementation plan
 
-Status (2026-10-27), on branch `feature/learning-coach`:
+Status (2026-10-28), on branch `feature/learning-coach`:
 - **P0 done.** Python↔JS feature parity is tested exactly.
 - **P1 done, alphabet unverified.** The alphabet is built from video ([§7](#7-alphabet-from-video)): ChicagoFSVid
   hand crops (4 signers) plus Kaggle photos as train-only supplement. 75.0% on the held-out signer, leave-one-signer-out
@@ -8,9 +8,14 @@ Status (2026-10-27), on branch `feature/learning-coach`:
 - **P2 done.** All 50 words ingested from ASL Citizen (1,554 clips, 48 signers, 855 MB), each with a reference video
   from a training-split signer.
 - **P3 done.** BiGRU word model: 84.0% top-1, 95.3% top-5, ECE 0.031 on 11 held-out signers; practice-score AUC 0.993.
+  DTW runs on numba (identical to the Python loop, ~100x faster). `/api/score` also returns `highlight` (the joints
+  of your hand that differ most), drawn in red on the camera. Signs with recordings but no model (custom signs,
+  self-recorded J/Z) are scored by DTW against their own recordings, calibrated on the same person making a
+  different sign: AUC 0.841 on held-out ASL Citizen signers (proxy; unverified on custom signs). Only signs with no
+  recording at all get "can't be scored yet".
 - **P4 and P5 done:** text → sign sequences, sentence practice, Leitner review queue, accessibility, EVALUATION.md.
-- 71 tests pass, including a real-video integration test. **Not done:** J/Z scoring (no multi-signer motion data) and
-  a manual check in a browser with a webcam.
+- The full test suite passes, including a real-video integration test. **Not done:** J/Z recognition (no multi-signer
+  motion data; they are scored only once you record them) and a manual check in a browser with a webcam.
 
 ---
 

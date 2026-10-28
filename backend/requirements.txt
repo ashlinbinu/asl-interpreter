@@ -12,3 +12,4 @@ mediapipe==0.10.14
 opencv-python>=4.9
 scikit-learn==1.9.*
 joblib==1.*
+numba==0.68.*          # DTW speed-up (~100x); scoring falls back to plain Python without it

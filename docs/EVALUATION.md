@@ -1,6 +1,6 @@
 # Evaluation
 
-Generated 2026-10-27 by `python -m scripts.evaluation_report` on Windows 11, AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD, Python 3.12.10. All accuracy numbers are on signers **not seen in training**.
+Generated 2026-10-28 by `python -m scripts.evaluation_report` on Windows 11, AMD64 Family 23 Model 104 Stepping 1, AuthenticAMD, Python 3.12.10. All accuracy numbers are on signers **not seen in training**.
 
 ## Words (50-sign vocabulary, ASL Citizen)
 
@@ -30,6 +30,12 @@ Most frequent confusions (test): good → thank you 33%, happy → please 25%, l
 
 logistic(target probability + DTW component percentiles), fitted on val signers. Ranking correct sign vs. a different sign on test signers: **AUC 0.993** (classifier probability alone 0.993; 2532 pairs). Single components: handshape 0.80, orientation 0.79, location 0.75, movement 0.63, two_hand 0.69. The components add little ranking power beyond the classifier; they are shown to explain the score and drive the hints.
 
+### Scoring against your own recording (custom signs, self-recorded letters)
+
+Signs with recordings but no trained model are scored by DTW against their own clips. Calibrated on the same person making a different sign (`scripts.calibrate_own_clip`), fitted on train + val signers (combination `all_components`, chosen by signer-grouped CV AUC: all_components 0.827, mean_of_components 0.795).
+
+Proxy test on held-out ASL Citizen signers, same signer repeating a word vs the same signer making a different word: **AUC 0.841** (91 repeat / 657 different-sign pairs); median score 80.5 vs 26.4. Single components: handshape 0.84, orientation 0.87, location 0.78, movement 0.67, two_hand 0.71. **Unverified on your own custom signs**: no held-out data exists for them.
+
 ## Alphabet (24 static letters)
 
 Model `alphabet-20261027-175212` (mlp). Sources: chicago_fsvid, kaggle_asl_alphabet; supplementary (train-only): kaggle_asl_alphabet. Test signers: chicago_fsvid:rita (domain: hand_crop).
@@ -51,24 +57,27 @@ Confusable sets: AEMNST 71.4%, UVR 77.0%, KP 81.8%, GQ 87.5%, GH 74.4%.
 
 ## Latency (measured on this machine)
 
+DTW runs on **numba**.
+
 | Step | Time |
 |---|---|
-| Features for one clip (FEATURE_SPEC, Python; ~58 frames) | 52.2 ms |
-| Word classification (numpy) | 7.0 ms |
-| Word score incl. DTW vs 5 references (numpy) | 39.6 ms |
-| Word classification in JavaScript (Node, same code as the browser) | 30.6 ms |
+| Features for one clip (FEATURE_SPEC, Python; ~58 frames) | 21.6 ms |
+| Word classification (numpy) | 3.2 ms |
+| Word score incl. DTW vs 5 references (numpy) | 34.7 ms |
+| Word classification in JavaScript (Node, same code as the browser) | 8.9 ms |
 
 MediaPipe landmark extraction offline: ~60 ms/frame per process on this CPU (hand ≈33, pose ≈22); throughput 38 frames/s with 3 processes (PLAN.md P2).
 Browser FPS and end-to-end live latency were **not measured**: no browser with a webcam was available in this environment. The camera shows its FPS live.
 
 ## Data
 
-Generated 2026-10-27 by `python -m scripts.dataset_report --write-docs`. Signers are counted per source (`source:signer`).
+Generated 2026-10-28 by `python -m scripts.dataset_report --write-docs`. Signers are counted per source (`source:signer`).
 
 | Category | Source | Signs | Clips | Signers | Clips by split |
 |---|---|---|---|---|---|
 | alphabet | chicago_fsvid | 24 | 3780 | 4 | none 3780 |
 | alphabet | kaggle_asl_alphabet | 24 | 7374 | 1 | none 7374 |
+| user | user | 4 | 4 | 2 | none 4 |
 | word | asl_citizen | 50 | 1554 | 48 | test 633, train 737, val 184 |
 
 Words with ≥15 clips and ≥8 signers: **50 of 50**.
@@ -79,5 +88,6 @@ Letters with clips: 24 of 26; fewest signers for any letter: 0.
 - A learning aid, not a translator. Text → sign is word-by-word glossing; ASL grammar, word order and non-manual markers (facial grammar) are not modelled.
 - Words: 50 signs, one variant each (the ASL Citizen gloss with most clips; e.g. EAT1, DRINK1). Other regional or variant forms will score low. Accuracy is for ASL Citizen's webcam recordings; your camera, lighting and framing can lower it.
 - Alphabet: unverified (see above). J and Z are not recognised or scored: no multi-signer motion data.
+- Custom signs and letters you record yourself are scored against your own recordings only (unverified; see the proxy test above). A sign with no recording can't be scored.
 - The practice score's weights were fitted on 5 validation signers; treat it as an estimate.
 - Several datasets are non-commercial or research-only (docs/DATASET.md). Don't deploy publicly or commercially with them.
