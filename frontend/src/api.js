@@ -40,6 +40,13 @@ export const api = {
   textToSign: (text, normalize = false) => req("/text-to-sign", { text, normalize }),
   addSign: (label, frames) => req("/signs", { label, frames, learner_id: learner().id }),
   deleteSign: (id) => req(`/signs/${id}`, undefined, "DELETE"),
+  recordSign: (id, frames, videoBlob) => {
+    const fd = new FormData();
+    fd.append("meta", JSON.stringify({ learner_id: learner().id, left_handed: learner().leftHanded }));
+    fd.append("landmarks", new Blob([JSON.stringify(frames)], { type: "application/json" }), "landmarks.json");
+    if (videoBlob) fd.append("video", videoBlob, "take.webm");
+    return req(`/signs/${id}/recording`, fd);
+  },
   attempt: (sign_id, score, extra = {}) => req("/attempts", { learner_id: learner().id, sign_id, score, ...extra }),
   progress: () => req(`/progress${qs({ learner_id: learner().id })}`),
   recordingSummary: (signer_id) => req(`/recordings/summary${qs({ signer_id })}`),

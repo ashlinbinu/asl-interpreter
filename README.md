@@ -34,7 +34,7 @@ Status: phases P0–P5 of [docs/PLAN.md](docs/PLAN.md) are implemented. Measured
 | Practice | Reference (real video or landmarks) beside your camera; live match meter; score with handshape / orientation / location / movement components and directional hints; replay your attempt (R); **sentence practice** (word by word, or whole sentence) |
 | Progress | Signs practised, mastered (≥80 in 3 of the last 4), Leitner review queue, recent attempts |
 | Record dataset | Guided recorder for A–Z (J/Z as motion takes) and words: prompts, countdown, N reps, quality check |
-| Add a sign | Record a custom sign (e.g. a name sign) as a reference clip |
+| Add a sign | Record a custom sign (e.g. a name sign): landmarks + video become its reference; "Record again" replaces a take; Delete removes it |
 
 ## Requirements
 
@@ -170,6 +170,7 @@ without `requirements-train.txt`, and the integration test without local data an
 | GET | `/signs?q=&category=&kind=&has_video=` | vocabulary |
 | GET | `/signs/{id}` | sign + reference video or photo (`reference_video_url`, `reference_image_url`), landmarks, license, attribution |
 | POST | `/signs` | add a custom sign (RawFrames) |
+| POST | `/signs/{id}/recording` | record a custom sign again (multipart: landmarks + optional video); the video becomes its reference video |
 | DELETE | `/signs/{id}` | delete a custom sign (source `user` only; 403 for built-in signs, 404 if missing); its attempts stay, marked deleted |
 | POST | `/recognize` | `{frames, mode: "alphabet"\|"word"}` or `{image}` → top-k `{label, confidence, sign_id, reference_video_url, reference_image_url}` |
 | POST | `/score` | `{sign_id, frames}` → `{score, components, hints, highlight, predicted}` (letters: calibrated probability; words: classifier + DTW components; signs with recordings but no model, e.g. custom signs: DTW against their own recordings, unverified; no recording: 409 with what to do). `highlight` = `{slot, joints}` of your hand that differ most, or null |

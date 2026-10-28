@@ -5,6 +5,7 @@ import re
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -65,13 +66,13 @@ class _TooLarge(Exception):
 class BodyLimit:
     """Reject request bodies over the configured size (multipart uploads get a larger limit)."""
 
-    def __init__(self, app, default: int, upload: int, upload_paths=("/api/recordings",)):
-        self.app, self.default, self.upload, self.upload_paths = app, default, upload, upload_paths
+    def __init__(self, app, default: int, upload: int, upload_paths=r"^/api/(recordings|signs/\d+/recording)$"):
+        self.app, self.default, self.upload, self.upload_paths = app, default, upload, re.compile(upload_paths)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
-        limit = self.upload if scope["path"] in self.upload_paths else self.default
+        limit = self.upload if self.upload_paths.match(scope["path"]) else self.default
         headers = dict(scope.get("headers") or [])
         cl = headers.get(b"content-length")
         if cl is not None and cl.isdigit() and int(cl) > limit:
@@ -118,6 +119,20 @@ def _require_hands(frames, minimum=fx.MIN_HAND_FRAMES):
         raise HTTPException(422, "No landmark frames provided.")
     if _hand_frames(frames) < minimum:
         raise HTTPException(422, "No hand detected in enough frames. Keep your hands inside the camera frame.")
+
+
+MIN_TAKE_HAND_FRAMES, MIN_TAKE_MS = 10, 400     # a custom sign's reference must show the whole sign
+
+
+def _require_custom_take(frames):
+    """A custom sign is scored against this take, so a few frames are not enough of a reference."""
+    _require_hands(frames)
+    with_hands = [f["t"] for f in frames if isinstance(f, dict) and f.get("hands")]
+    span = (max(with_hands) - min(with_hands)) if with_hands else 0
+    if len(with_hands) < MIN_TAKE_HAND_FRAMES or span < MIN_TAKE_MS:
+        raise HTTPException(422, f"The recording is too short ({len(with_hands)} frames, {span / 1000:.1f} s with a "
+                                 f"visible hand). Hold the button for the whole sign: at least {MIN_TAKE_HAND_FRAMES} "
+                                 f"frames and {MIN_TAKE_MS / 1000:.1f} s with your hand in view.")
 
 
 def _feedback(score: float) -> str:
@@ -234,7 +249,7 @@ def get_sign(sign_id: int):
 @app.post("/api/signs")
 def add_sign(body: SignIn):
     frames = frames_to_dicts(body.frames)
-    _require_hands(frames)
+    _require_custom_take(frames)
     signer = body.learner_id or "anonymous"
     with Session() as s:
         row = Sign(label=body.label, gloss=body.label.upper().replace(" ", "-"), category="user", kind="dynamic",
@@ -292,6 +307,74 @@ def delete_sign(sign_id: int):
     registry.load(settings.dev_synthetic)
     return {"deleted": sign_id, "label": label, "clips_removed": len(clips), "files_removed": removed,
             "attempts_kept": kept}
+
+
+@app.post("/api/signs/{sign_id}/recording")
+async def record_sign(sign_id: int, landmarks: UploadFile = File(...), video: Optional[UploadFile] = File(None),
+                      meta: str = Form("{}")):
+    """Record a custom sign again: the new take (landmarks + optional browser video) replaces its previous custom
+    recording, and the video becomes the sign's reference video. Takes from the Record page are kept."""
+    try:
+        m = json.loads(meta or "{}")
+        frames = frames_to_dicts(_frames_adapter.validate_json(await landmarks.read()))
+    except (ValueError, ValidationError) as err:
+        raise HTTPException(422, f"Invalid recording payload: {err}") from err
+    with Session() as s:
+        row = s.get(Sign, sign_id)
+        if row is None:
+            raise HTTPException(404, f"Sign with id {sign_id} not found.")
+        if row.source != "user":
+            raise HTTPException(403, f"'{row.label}' is a built-in sign; only your own custom signs can be re-recorded.")
+        label = row.label
+    _require_custom_take(frames)
+    learner = str(m.get("learner_id") or "")
+    signer = learner if re.fullmatch(r"[A-Za-z0-9_-]{6,64}", learner) else "anonymous"
+    stamp = f"{_slug(label)}_{sign_id}_{int(time.time() * 1000)}"
+    rel_lm = f"landmarks/user/{signer}/{stamp}.npz"
+    save_clip(settings.store_dir / rel_lm, frames, {"label": label, "source": "user", "signer_id": signer,
+                                                    "left_handed": bool(m.get("left_handed"))})
+    rel_video, data = None, await video.read() if video is not None else b""
+    if data:
+        ext = ".mp4" if "mp4" in (video.content_type or "") else ".webm"
+        rel_video = f"recordings/user/{signer}/{stamp}{ext}"
+        (settings.store_dir / rel_video).parent.mkdir(parents=True, exist_ok=True)
+        (settings.store_dir / rel_video).write_bytes(data)
+    ts = [f["t"] for f in frames]
+    with Session() as s:
+        old = s.query(ReferenceClip).filter(ReferenceClip.sign_id == sign_id, ReferenceClip.source == "user").all()
+        old_files = [p for c in old for p in (c.landmarks_path, c.video_path)]
+        old_media = []
+        for c in s.query(ReferenceClip).filter(ReferenceClip.sign_id == sign_id):
+            c.is_canonical = False
+        for c in old:
+            s.delete(c)
+        clip = ReferenceClip(sign_id=sign_id, source="user", signer_id=signer, landmarks_path=rel_lm,
+                             video_path=rel_video, num_frames=len(frames), start_ms=min(ts), end_ms=max(ts),
+                             quality={**quality(frames), "left_handed": bool(m.get("left_handed"))},
+                             license="user-contributed (local)", attribution="your recording", is_canonical=True)
+        s.add(clip)
+        s.flush()
+        if rel_video:
+            ref = s.query(ReferenceVideo).filter(ReferenceVideo.sign_id == sign_id).one_or_none()
+            if ref is not None:
+                old_media.append(ref.path)
+            else:
+                ref = ReferenceVideo(sign_id=sign_id)
+                s.add(ref)
+            ref.path = f"videos/{sign_id}/user_{clip.id}{Path(rel_video).suffix}"
+            (settings.media_dir / ref.path).parent.mkdir(parents=True, exist_ok=True)
+            (settings.media_dir / ref.path).write_bytes(data)
+            ref.clip_id, ref.duration_ms = clip.id, max(ts) - min(ts)
+            ref.license, ref.attribution, ref.source_url = "your own recording (local)", "Your recording", None
+        _touch_learner(s, learner if signer != "anonymous" else None)
+        s.commit()
+    for p in old_files:
+        _remove_file(settings.store_dir, p)
+    for p in old_media:
+        _remove_file(settings.media_dir, p)
+    clip_scorer.invalidate(sign_id)
+    registry.load(settings.dev_synthetic)
+    return registry.by_id[sign_id].public()
 
 
 # ---------------------------------------------------------------- recognition + scoring
