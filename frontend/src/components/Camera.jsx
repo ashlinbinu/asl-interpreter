@@ -125,7 +125,7 @@ const Camera = forwardRef(function Camera(
   useEffect(() => {
     let raf, stopped = false, lastVideoTime = -1, lastT = 0;
     const recent = [];
-    let luminance = null, fpsEma = 0, lastUi = 0, lastLum = 0;
+    let luminance = null, fpsEma = 0, lastUi = 0, lastLum = 0, hadHand = false;
     const lumCanvas = document.createElement("canvas");
     lumCanvas.width = 32; lumCanvas.height = 24;
     (async () => {
@@ -172,7 +172,10 @@ const Camera = forwardRef(function Camera(
               for (let i = 0; i < d.length; i += 4) sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
               luminance = sum / (d.length / 4);
             }
-            if (t - lastUi > 400) {
+            // Refresh every 400 ms, and at once when a hand comes into view (clears "No hands detected").
+            const hasHand = frame.hands.length > 0, handAppeared = hasHand && !hadHand;
+            hadHand = hasHand;
+            if (t - lastUi > 400 || handAppeared) {
               lastUi = t;
               setFps(fpsEma);
               setWarnings(qualityWarnings(recent, { kind: L.kind, luminance, fps: fpsEma }));
