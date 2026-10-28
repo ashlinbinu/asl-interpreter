@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import SpeedControl from "./SpeedControl.jsx";
 import { mediaUrl } from "../api.js";
+import { applyRate, getSpeed, scaled, useSpeed } from "../lib/playback.js";
 
 const LETTER_MS = 900;    // a fingerspelled letter (photo or card) at 1x
 const CARD_MS = 1600;     // a known sign without a reference video yet
+const FADE_MS = 150;      // crossfade between clips at 1x
 
 const media = (m) => (m.video_url ? { kind: "video", url: mediaUrl(m.video_url) }
   : m.image_url ? { kind: "photo", url: mediaUrl(m.image_url) } : null);
@@ -35,13 +38,12 @@ export default function VideoSequencePlayer({ entries, onActive }) {
   const items = useMemo(() => sequenceItems(entries), [entries]);
   const [i, setI] = useState(0);
   const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState(1);
+  const [speed] = useSpeed();
   const [loop, setLoop] = useState(false);
   const [front, setFront] = useState(0);
   const [replay, setReplay] = useState(0);
   const vids = [useRef(null), useRef(null)];
   const frontRef = useRef(0);
-  const timer = useRef(null);
   const item = items[i];
 
   const advance = () => setI((k) => {
@@ -54,7 +56,6 @@ export default function VideoSequencePlayer({ entries, onActive }) {
   useEffect(() => { setI(0); setPlaying(true); }, [items]);
 
   useEffect(() => {
-    clearTimeout(timer.current);
     if (!item) return undefined;
     onActive?.(item.entry, item.letter);
     if (item.kind === "video") {
@@ -64,7 +65,7 @@ export default function VideoSequencePlayer({ entries, onActive }) {
         vids[frontRef.current].current?.pause();
         frontRef.current = back;
         setFront(back);
-        v.playbackRate = speed;
+        applyRate(v, getSpeed());
         if (playing) v.play().catch(() => {});
       };
       if (v.dataset.src !== item.url) { v.src = item.url; v.dataset.src = item.url; }
@@ -73,11 +74,17 @@ export default function VideoSequencePlayer({ entries, onActive }) {
       return () => v.removeEventListener("loadeddata", start);
     }
     vids[frontRef.current].current?.pause();
-    if (playing) timer.current = setTimeout(advance, item.ms / speed);
-    return () => clearTimeout(timer.current);
+    return undefined;
   }, [i, items, replay, playing]);
 
-  useEffect(() => { vids.forEach((r) => { if (r.current) r.current.playbackRate = speed; }); }, [speed]);
+  // Photos and cards are timed: their time stretches with the speed, also when it changes while one is shown.
+  useEffect(() => {
+    if (!item || item.kind === "video" || !playing) return undefined;
+    const t = setTimeout(advance, scaled(item.ms, speed));
+    return () => clearTimeout(t);
+  }, [i, items, replay, playing, speed]);
+
+  useEffect(() => { vids.forEach((r) => applyRate(r.current, speed)); }, [speed]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -105,6 +112,7 @@ export default function VideoSequencePlayer({ entries, onActive }) {
       <div className="seq-stage">
         {[0, 1].map((k) => (
           <video key={k} ref={vids[k]} muted playsInline preload="auto" onEnded={onEnded(k)}
+                 style={{ transitionDuration: `${scaled(FADE_MS, speed)}ms` }}
                  className={`seq-video ${showVideo && front === k ? "on" : ""}`} aria-hidden={!(showVideo && front === k)} />
         ))}
         {item?.kind === "photo" && (
@@ -123,9 +131,7 @@ export default function VideoSequencePlayer({ entries, onActive }) {
         <button className="chip small" onClick={() => setPlaying((p) => !p)} aria-label="Play or pause (P)">{playing ? "Pause" : "Play"}</button>
         <button className="chip small" onClick={() => { setPlaying(true); setReplay((n) => n + 1); }} aria-label="Replay (R)">Replay</button>
         <button className="chip small" onClick={() => setI((k) => Math.min(k + 1, items.length - 1))} aria-label="Next (→)">▶</button>
-        {[0.5, 0.75, 1].map((v) => (
-          <button key={v} className={`chip small ${speed === v ? "on" : ""}`} onClick={() => setSpeed(v)} aria-pressed={speed === v}>{v}×</button>
-        ))}
+        <SpeedControl />
         <label className="inline-check"><input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} /> loop</label>
       </div>
       <div className="timeline" role="tablist" aria-label="Signs in this sentence">

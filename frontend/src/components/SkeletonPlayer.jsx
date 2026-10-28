@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { skeletonFrameIndex, useSpeed } from "../lib/playback.js";
 import { HAND_CONNECTIONS, POSE_UPPER } from "../lib/vision.js";
 
 const FACE_DOTS = [0, 2, 5, 9, 10];
@@ -59,31 +60,33 @@ function drawLegacy(ctx, f, size) {
   });
 }
 
-/** Loops real reference landmarks (RawFrames). Legacy 126-number frames render greyed (dev synthetic only). */
-export default function SkeletonPlayer({ frames, size = 260, mirror = false, speed = 1, label }) {
+/**
+ * Loops real reference landmarks (RawFrames) at the shared playback speed: media time advances by wall time x
+ * speed, so 0.5x shows each frame twice as long, and changing the speed doesn't restart the loop.
+ * Legacy 126-number frames render greyed (dev synthetic only).
+ */
+export default function SkeletonPlayer({ frames, size = 260, mirror = false, label }) {
   const ref = useRef();
+  const [speed] = useSpeed();
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
   useEffect(() => {
     if (!frames?.length) return;
     const ctx = ref.current.getContext("2d");
     const raw = !Array.isArray(frames[0]) || typeof frames[0][0] !== "number";
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const box = raw ? bounds(frames) : null;
-    const t0 = raw ? frames[0].t : 0;
-    const dur = raw ? Math.max(frames[frames.length - 1].t - t0, 1) : frames.length * 80;
-    let raf, start = performance.now();
+    let raf, last = performance.now(), media = 0;
     const tick = (now) => {
-      const el = ((now - start) * speed) % (dur + 600);   // short pause between loops
-      let f;
-      if (raw) {
-        const target = t0 + Math.min(el, dur);
-        f = frames.find((g) => g.t >= target) || frames[frames.length - 1];
-      } else f = frames[Math.min(Math.floor(el / 80), frames.length - 1)];
+      media += (now - last) * speedRef.current;
+      last = now;
+      const f = frames[skeletonFrameIndex(frames, media)];
       ctx.clearRect(0, 0, size, size);
       raw ? drawRaw(ctx, f, box, size, mirror) : drawLegacy(ctx, f, size);
       if (!reduce) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [frames, size, mirror, speed]);
+  }, [frames, size, mirror]);
   return <canvas ref={ref} width={size} height={size} className="skeleton" role="img" aria-label={label || "Reference skeleton animation"} />;
 }

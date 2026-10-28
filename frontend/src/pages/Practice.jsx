@@ -32,7 +32,6 @@ export default function Practice({ initialSignId, initialSentence }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({});
   const [capture, setCapture] = useState("auto");
-  const [speed, setSpeed] = useState(1);
   const [wordsReady, setWordsReady] = useState(false);
   const isStaticLetter = sel?.category === "alphabet" && sel?.kind === "static";
   const isMotionLetter = sel?.category === "alphabet" && sel?.kind === "dynamic";
@@ -134,12 +133,7 @@ export default function Practice({ initialSignId, initialSentence }) {
               <h3>Reference: <span className="hl">{sel.label}</span></h3>
               <button className="speak-btn" onClick={() => speak(sel.label)}>🔊</button>
             </div>
-            <ReferencePanel sign={sel} speed={speed} />
-            <div className="speed" role="group" aria-label="Playback speed">
-              {[0.5, 0.75, 1].map((v) => (
-                <button key={v} className={`chip small ${speed === v ? "on" : ""}`} onClick={() => setSpeed(v)}>{v}×</button>
-              ))}
-            </div>
+            <ReferencePanel sign={sel} />
           </div>
         )}
       </div>
