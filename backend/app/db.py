@@ -109,6 +109,7 @@ class Attempt(Base):
     hints = Column(JSON)
     duration_ms = Column(Float)
     model_version = Column(String)
+    deleted_sign_label = Column(String)                   # set when its (custom) sign is deleted
 
 
 def migrate(url: str, revision: str = "head"):

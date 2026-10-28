@@ -20,7 +20,8 @@ from . import mediapipe_models
 from .clipstore import load_clip, quality, save_clip
 from .config import get_settings
 from .content import letter_hint
-from .db import Attempt, Learner, ReferenceClip, Session, Sign, check_connection, init_db
+from .db import (Attempt, Learner, ReferenceClip, ReferenceImage, ReferenceVideo, Session, Sign, check_connection,
+                 init_db)
 from .recognition import NoHandError, models
 from .registry import ensure_alphabet, norm, registry
 from .schemas import (AttemptIn, Frames, RecognizeIn, RecognizeOut, ScoreIn, ScoreOut, SignIn, TextIn,
@@ -100,7 +101,7 @@ class BodyLimit:
 
 
 app.add_middleware(BodyLimit, default=settings.max_body_bytes, upload=settings.max_upload_bytes)
-app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_methods=["GET", "POST"],
+app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_methods=["GET", "POST", "DELETE"],
                    allow_headers=["Content-Type"])
 app.mount("/media", StaticFiles(directory=settings.media_dir, check_dir=False), name="media")
 
@@ -249,6 +250,45 @@ def add_sign(body: SignIn):
         sign_id = row.id
     registry.load(settings.dev_synthetic)
     return registry.by_id[sign_id].public()
+
+
+def _remove_file(root, rel) -> bool:
+    """Delete root/rel if it is a file inside root (never follows a path out of the store)."""
+    if not rel:
+        return False
+    base = root.resolve()
+    p = (root / rel).resolve()
+    if not p.is_relative_to(base) or not p.is_file():
+        return False
+    p.unlink()
+    return True
+
+
+@app.delete("/api/signs/{sign_id}")
+def delete_sign(sign_id: int):
+    """Delete a custom sign (source "user") with its clips and files. Its attempts stay, labelled as deleted."""
+    with Session() as s:
+        row = s.get(Sign, sign_id)
+        if row is None:
+            raise HTTPException(404, f"Sign with id {sign_id} not found.")
+        if row.source != "user":
+            raise HTTPException(403, f"'{row.label}' is a built-in sign; only your own custom signs can be deleted.")
+        label = row.label
+        clips = s.query(ReferenceClip).filter(ReferenceClip.sign_id == sign_id).all()
+        store = [c.landmarks_path for c in clips] + [c.video_path for c in clips]
+        media = [m.path for m in s.query(ReferenceVideo).filter(ReferenceVideo.sign_id == sign_id)]
+        media += [m.path for m in s.query(ReferenceImage).filter(ReferenceImage.sign_id == sign_id)]
+        kept = (s.query(Attempt).filter(Attempt.sign_id == sign_id)
+                .update({Attempt.deleted_sign_label: label}, synchronize_session=False))
+        for model in (ReferenceVideo, ReferenceImage, ReferenceClip):
+            s.query(model).filter(model.sign_id == sign_id).delete(synchronize_session=False)
+        s.delete(row)
+        s.commit()
+    removed = sum(_remove_file(settings.store_dir, p) for p in store) + \
+        sum(_remove_file(settings.media_dir, p) for p in media)
+    registry.load(settings.dev_synthetic)
+    return {"deleted": sign_id, "label": label, "clips_removed": len(clips), "files_removed": removed,
+            "attempts_kept": kept}
 
 
 # ---------------------------------------------------------------- recognition + scoring
@@ -464,6 +504,8 @@ def progress(learner_id: str = Query(..., pattern=r"^[A-Za-z0-9_-]{6,64}$")):
     signs = []
     for sid, atts in per.items():
         e = registry.by_id.get(sid)
+        gone = e is None
+        label = e.label if e else f"{atts[-1].deleted_sign_label or sid} (deleted)"
         last = [a.score or 0 for a in atts[-of:]]
         box = 0                                    # Leitner box: trailing run of passing attempts
         for a in reversed(atts):
@@ -471,8 +513,8 @@ def progress(learner_id: str = Query(..., pattern=r"^[A-Za-z0-9_-]{6,64}$")):
                 break
             box += 1
         when = atts[-1].created_at
-        due = when is None or (now - when).total_seconds() >= REVIEW_DAYS[box] * 86400
-        signs.append({"sign_id": sid, "label": e.label if e else str(sid), "attempts": len(atts),
+        due = not gone and (when is None or (now - when).total_seconds() >= REVIEW_DAYS[box] * 86400)
+        signs.append({"sign_id": sid, "label": label, "deleted": gone, "attempts": len(atts),
                       "best": max(a.score or 0 for a in atts), "last": atts[-1].score,
                       "recent_mean": round(sum(last) / len(last), 1),
                       "mastered": sum(v >= MASTERY_SCORE for v in last) >= need, "box": box, "due": due,

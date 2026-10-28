@@ -42,7 +42,8 @@ export default function Progress({ go }) {
           <tbody>
             {p.signs.map((s) => (
               <tr key={s.sign_id}>
-                <td><button className="link" onClick={() => go("practice", s.sign_id)}>{s.label}</button></td>
+                <td>{s.deleted ? <span className="muted">{s.label}</span>
+                  : <button className="link" onClick={() => go("practice", s.sign_id)}>{s.label}</button>}</td>
                 <td>{s.attempts}</td><td>{Math.round(s.best)}</td><td>{s.recent_mean}</td><td>{s.box}</td>
                 <td>{s.mastered ? "mastered ✓" : s.due ? "due" : "learning"}</td><td>{fmt(s.last_at)}</td>
               </tr>

@@ -161,9 +161,10 @@ without `requirements-train.txt`, and the integration test without local data an
 |---|---|---|
 | GET | `/status` | DB counts, model versions + held-out metrics from `metrics.json`, feature spec version |
 | GET | `/signs?q=&category=&kind=&has_video=` | vocabulary |
-| GET | `/signs/{id}` | sign + reference video/landmarks, license, attribution |
+| GET | `/signs/{id}` | sign + reference video or photo (`reference_video_url`, `reference_image_url`), landmarks, license, attribution |
 | POST | `/signs` | add a custom sign (RawFrames) |
-| POST | `/recognize` | `{frames, mode: "alphabet"\|"word"}` or `{image}` → top-k `{label, confidence, sign_id, reference_video_url}` |
+| DELETE | `/signs/{id}` | delete a custom sign (source `user` only; 403 for built-in signs, 404 if missing); its attempts stay, marked deleted |
+| POST | `/recognize` | `{frames, mode: "alphabet"\|"word"}` or `{image}` → top-k `{label, confidence, sign_id, reference_video_url, reference_image_url}` |
 | POST | `/score` | `{sign_id, frames}` → `{score, components, hints, predicted}` (letters: calibrated probability; words: classifier + DTW components) |
 | POST | `/text-to-sign` | `{text, normalize}` → ordered entries (gloss, sign id, video, attribution, fingerspelling), dropped/changed words |
 | POST | `/recordings` | multipart recorder upload (meta + landmarks JSON + optional video) |

@@ -81,6 +81,10 @@ figure { margin:0; } figcaption { margin-top:.4rem; font-weight:600; color:var(-
 .score-head { display:flex; align-items:baseline; gap:.8rem; }
 .hints { margin:.6rem 0 0; padding-left:1.2rem; } .hints li { margin:.25rem 0; }
 .chip.small { font-size:.8rem; padding:.2rem .6rem; }
+.chip.danger { border-color:var(--red); color:var(--red); } .chip.danger:hover { background:var(--red); color:#000; }
+.custom-signs { list-style:none; padding:0; margin:.5rem 0; display:flex; flex-direction:column; gap:.4rem; max-width:520px; }
+.custom-signs li { display:flex; align-items:center; gap:.75rem; padding:.5rem .75rem; border:1px solid var(--line); border-radius:10px; }
+.custom-signs li > span:first-child { flex:1; font-weight:600; }
 .chip.mastered { border-color:var(--green); }
 .chip .count { margin-left:.3rem; font-size:.65rem; color:var(--muted); }
 .chip.on .count { color:#333; }

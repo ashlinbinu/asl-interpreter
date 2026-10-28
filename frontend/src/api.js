@@ -9,7 +9,7 @@ async function req(path, body, method) {
     ? { method: "POST", body }
     : body !== undefined
       ? { method: method || "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-      : undefined;
+      : method ? { method } : undefined;
   const r = await fetch(BASE + path, opts);
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
@@ -39,6 +39,7 @@ export const api = {
     req("/score", { sign_id, frames, mode, left_handed: learner().leftHanded, learner_id: learner().id }),
   textToSign: (text, normalize = false) => req("/text-to-sign", { text, normalize }),
   addSign: (label, frames) => req("/signs", { label, frames, learner_id: learner().id }),
+  deleteSign: (id) => req(`/signs/${id}`, undefined, "DELETE"),
   attempt: (sign_id, score, extra = {}) => req("/attempts", { learner_id: learner().id, sign_id, score, ...extra }),
   progress: () => req(`/progress${qs({ learner_id: learner().id })}`),
   recordingSummary: (signer_id) => req(`/recordings/summary${qs({ signer_id })}`),
