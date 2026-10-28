@@ -147,6 +147,51 @@ def alphabet_section(am: StaticModel):
     return lines
 
 
+def _mirrored(frames):
+    """The same clip as a left-handed signer would make it (horizontal mirror, handedness and pose sides swapped)."""
+    swap = [(1, 4), (2, 5), (3, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16)]
+    out = []
+    for f in frames:
+        hands = [{**h, "handedness": {"Left": "Right", "Right": "Left"}.get(h.get("handedness")),
+                  "lm": [[1 - x, y, z] for x, y, z in h["lm"]]} for h in f.get("hands") or []]
+        pose = None
+        if f.get("pose"):
+            pose = [[1 - q[0], q[1], q[2], q[3]] for q in f["pose"]]
+            for a, b in swap:
+                pose[a], pose[b] = pose[b], pose[a]
+        out.append({**f, "hands": hands, "pose": pose})
+    return out
+
+
+def motion_section():
+    from app.motion_letters import NoMotionReference, motion_scorer
+    lines = ["### J and Z (letters that move)", ""]
+    try:
+        loo = {L: motion_scorer.leave_one_out(L) for L in "JZ"}
+    except NoMotionReference:
+        return lines + ["Not scored: the letter reference videos are missing "
+                        "(`python -m scripts.datasets.ingest_commons_alphabet`).", ""]
+    st = get_settings()
+    clip = motion_scorer.reference("J")["clip"]
+    lines += [f"Scored on handshape (only the defining finger extended) and the path of that fingertip, against one "
+              f"reference signer (`{clip.source}:{clip.signer_id}`). Check on that signer's other letters, each scored "
+              "as J or Z with itself left out of the comparison:", "",
+              "| Scored as | Other letters: median | Highest | Scoring >= 50 | The reference clip itself: as is / "
+              "1.4x slower / 0.7x faster / mirrored (left-handed) |", "|---|---|---|---|---|"]
+    for L, r in loo.items():
+        v = np.array(list(r.values()))
+        ref = motion_scorer.reference(L)["clip"]
+        frames, _ = load_clip(st.store_dir / ref.landmarks_path)
+        own = [motion_scorer.score(frames, L)["score"],
+               motion_scorer.score([{**f, "t": f["t"] * 1.4} for f in frames], L)["score"],
+               motion_scorer.score([{**f, "t": f["t"] * 0.7} for f in frames], L)["score"],
+               motion_scorer.score(_mirrored(frames), L, left_handed=True)["score"]]
+        lines.append(f"| {L} | {np.median(v):.1f} | {v.max():.1f} ({max(r, key=r.get)}) | {int((v >= 50).sum())} of "
+                     f"{len(v)} | {' / '.join(f'{x:.0f}' for x in own)} |")
+    lines += ["", "**Unverified on other signers**: there is no second signer's J or Z to test a correct attempt.", ""]
+    return lines
+
+
 def main():
     init_db()
     from scripts.dataset_report import counts, to_markdown
@@ -161,6 +206,7 @@ def main():
         lines += words_section(wm)
     if am:
         lines += alphabet_section(am)
+    lines += motion_section()
     lines += ["## Latency (measured on this machine)", ""]
     if wm:
         lat = word_latency(wm)
@@ -185,7 +231,8 @@ def main():
               "clips; e.g. EAT1, DRINK1). Other "
               "regional or variant forms will score low. Accuracy is for ASL Citizen's webcam recordings; your "
               "camera, lighting and framing can lower it.",
-              "- Alphabet: unverified (see above). J and Z are not recognised or scored: no multi-signer motion data.",
+              "- Alphabet: unverified (see above). J and Z are not recognised live; they are scored against one "
+              "reference signer's video (see above), which is unverified on other signers.",
               "- Custom signs are scored against your own recordings only (unverified; see the proxy test above). "
               "A sign with no recording can't be scored. Letters are never scored this way: against a letter's "
               "reference, a different letter by the same signer scored a median of ~94 (26 letters of one signer).",

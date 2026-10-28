@@ -89,11 +89,13 @@ def test_custom_sign_without_recording_gives_a_friendly_message(client):
     assert "no recording of 'no take test'" in msg and "Add a sign" in msg and "P2" not in msg
 
 
-def test_motion_letters_are_not_scored_even_with_a_recording(client):
+def test_motion_letters_are_not_scored_against_own_recordings(client):
     jid = _letter_id(client, "J")
     take = synth.sign_clip(seed=31, path="chest_circle")
     up = client.post("/api/recordings", data={"meta": json.dumps({"sign_id": jid, "signer_id": "me_01"})},
                      files={"landmarks": ("l.json", json.dumps(take), "application/json")})
     assert up.status_code == 200, up.text
     r = client.post("/api/score", json={"sign_id": jid, "frames": synth.sign_clip(seed=32, path="chest_circle")})
-    assert r.status_code == 409 and "isn't scored yet" in r.json()["detail"]
+    # J and Z are scored only against the letter reference videos (tests/test_motion_letters.py), never by DTW
+    # against recordings; this test database has none, so the answer says what is missing.
+    assert r.status_code == 409 and "ingest_commons_alphabet" in r.json()["detail"]

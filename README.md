@@ -13,7 +13,8 @@ Status: phases P0–P5 of [docs/PLAN.md](docs/PLAN.md) are implemented. Measured
   (646 clips). Every word has a real signer's reference video.
 - **Alphabet (24 static letters): unverified.** 75.0% on one held-out ChicagoFSVid signer, but those are studio hand
   crops, not webcam video. All 26 letters have a real reference video (one signer, Wikimedia Commons, CC BY-SA 3.0).
-  J and Z are shown but not recognised or scored: no multi-signer motion data.
+  J and Z are scored on handshape + fingertip path against that video (no other letter of that signer reaches 50;
+  unverified on other signers) but not recognised live.
 - **Custom signs** are scored by DTW against your own recordings: AUC 0.827 on a proxy (held-out ASL Citizen signers
   repeating a word vs making another); unverified on your signs.
 - The browser pages were built and unit-tested, but **not tried with a real webcam** (none was available).

@@ -55,16 +55,27 @@ Most frequent confusions: D → K 51%, O → N 30%, I → T 27%, W → V 20%, E 
 
 Confusable sets: AEMNST 71.4%, UVR 77.0%, KP 81.8%, GQ 87.5%, GH 74.4%.
 
+### J and Z (letters that move)
+
+Scored on handshape (only the defining finger extended) and the path of that fingertip, against one reference signer (`wikimedia_commons:travis_dougherty`). Check on that signer's other letters, each scored as J or Z with itself left out of the comparison:
+
+| Scored as | Other letters: median | Highest | Scoring >= 50 | The reference clip itself: as is / 1.4x slower / 0.7x faster / mirrored (left-handed) |
+|---|---|---|---|---|
+| J | 0.0 | 27.1 (Y) | 0 of 25 | 100 / 100 / 100 / 100 |
+| Z | 0.0 | 34.8 (L) | 0 of 25 | 100 / 100 / 100 / 100 |
+
+**Unverified on other signers**: there is no second signer's J or Z to test a correct attempt.
+
 ## Latency (measured on this machine)
 
 DTW runs on **numba**.
 
 | Step | Time |
 |---|---|
-| Features for one clip (FEATURE_SPEC, Python; ~58 frames) | 50.5 ms |
-| Word classification (numpy) | 7.2 ms |
-| Word score incl. DTW vs 5 references (numpy; DTW on numba) | 53.7 ms |
-| Word classification in JavaScript (Node, same code as the browser) | 17.4 ms |
+| Features for one clip (FEATURE_SPEC, Python; ~58 frames) | 37.3 ms |
+| Word classification (numpy) | 5.7 ms |
+| Word score incl. DTW vs 5 references (numpy; DTW on numba) | 22.2 ms |
+| Word classification in JavaScript (Node, same code as the browser) | 18.6 ms |
 
 MediaPipe landmark extraction offline: ~60 ms/frame per process on this CPU (hand ≈33, pose ≈22); throughput 38 frames/s with 3 processes (PLAN.md P2).
 Browser FPS and end-to-end live latency were **not measured**: no browser with a webcam was available in this environment. The camera shows its FPS live.
@@ -88,7 +99,7 @@ Letters with clips: 26 of 26; fewest signers for any letter: 1.
 
 - A learning aid, not a translator. Text → sign is word-by-word glossing; ASL grammar, word order and non-manual markers (facial grammar) are not modelled.
 - Words: 51 signs, one variant each (the ASL Citizen gloss with most clips; e.g. EAT1, DRINK1). Other regional or variant forms will score low. Accuracy is for ASL Citizen's webcam recordings; your camera, lighting and framing can lower it.
-- Alphabet: unverified (see above). J and Z are not recognised or scored: no multi-signer motion data.
+- Alphabet: unverified (see above). J and Z are not recognised live; they are scored against one reference signer's video (see above), which is unverified on other signers.
 - Custom signs are scored against your own recordings only (unverified; see the proxy test above). A sign with no recording can't be scored. Letters are never scored this way: against a letter's reference, a different letter by the same signer scored a median of ~94 (26 letters of one signer).
 - The practice score's weights were fitted on 5 validation signers; treat it as an estimate.
 - Several datasets are non-commercial or research-only (docs/DATASET.md). Don't deploy publicly or commercially with them.

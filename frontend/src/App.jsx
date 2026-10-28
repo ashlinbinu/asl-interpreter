@@ -18,6 +18,7 @@ const TABS = [
 ];
 
 const HELD_OUT = ["signer_holdout", "official_signer_split"];
+const API_VERSION = 7;   // must match backend/app/main.py: an older backend lacks endpoints this page uses
 
 function ModelBadge({ m, name }) {
   if (!m?.ready) return <span className="badge" title={m?.error || ""}>{name} model: not trained</span>;
@@ -92,6 +93,11 @@ export default function App() {
       </header>
       <main id="main">
         {epoch > 0 && !up && <p className="banner" role="alert">Lost the connection to the backend: retrying…</p>}
+        {up && status.api_version !== API_VERSION && (
+          <p className="error" role="alert">The backend is running older code than this page (it was started before the
+            last update), so videos, scoring or delete may not work. Close the "ASL Backend" and "ASL Frontend" windows
+            and run <code>run_all.bat</code> again.</p>
+        )}
         {epoch === 0 ? (
           <section className="card" role="status">
             <h2>{status ? "Waiting for the backend…" : "Connecting…"}</h2>

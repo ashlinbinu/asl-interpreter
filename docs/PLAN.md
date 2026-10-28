@@ -14,10 +14,12 @@ Status (2026-10-28), on branch `feature/learning-coach`:
   of your hand that differ most), drawn in red on the camera. Custom signs are scored by DTW against their own
   recordings, calibrated on the same person making a different sign: AUC 0.827 on held-out ASL Citizen signers
   (proxy; unverified on custom signs). Letters are never scored that way: against a letter's reference, a different
-  letter by the same signer scores a median of ~94, so J and Z stay unscored.
+  letter by the same signer scores a median of ~94. J and Z are scored instead on handshape (only the defining
+  finger extended) and the fingertip path against the reference video: none of that signer's 25 other letters
+  reaches 50 (leave-one-out); unverified on other signers.
 - **P4 and P5 done:** text → sign sequences, sentence practice, Leitner review queue, accessibility, EVALUATION.md.
-- The full test suite passes, including a real-video integration test. **Not done:** J/Z recognition and scoring
-  (needs motion data from several signers) and a manual check in a browser with a webcam.
+- The full test suite passes, including a real-video integration test. **Not done:** live J/Z recognition and a
+  J/Z check on more signers (needs motion data from several signers), and a manual check with a webcam.
 
 ---
 

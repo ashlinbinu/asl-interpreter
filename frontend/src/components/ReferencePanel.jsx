@@ -37,7 +37,9 @@ export default function ReferencePanel({ signId, sign: given, compact = false })
   if (!sign) return <p className="muted">Loading reference…</p>;
   const ref = sign.reference_landmarks;
   const size = compact ? 220 : 280;
-  const moving = !!sign.reference_video_url || (skeleton && (ref?.frames || sign.frames || []).length > 1);
+  const landmarksOnly = !sign.reference_video_url && !sign.reference_image_url && !!(ref || sign.frames);
+  const showSkeleton = skeleton || landmarksOnly;
+  const moving = !!sign.reference_video_url || (showSkeleton && (ref?.frames || sign.frames || []).length > 1);
   const keepRate = (e) => applyRate(e.currentTarget, getSpeed());
   return (
     <figure className="reference">
@@ -60,7 +62,7 @@ export default function ReferencePanel({ signId, sign: given, compact = false })
                alt={`Photo of the handshape for ${sign.label}`} />
           <figcaption className="muted small">Photo: {sign.image_attribution} · {sign.image_license}</figcaption>
         </>
-      ) : (
+      ) : landmarksOnly ? null : (
         <div className="media-missing" role="img" aria-label={`No video available yet for ${sign.label}`}
              style={{ maxWidth: size * 1.4 }}>
           <b>No video available yet</b>
@@ -69,10 +71,14 @@ export default function ReferencePanel({ signId, sign: given, compact = false })
       )}
       {(ref || sign.frames) && (
         <div className="skeleton-toggle">
-          <button className="chip small" aria-pressed={skeleton} onClick={() => setSkeleton((v) => !v)}>
-            {skeleton ? "Hide landmarks" : "Show landmarks"}
-          </button>
-          {skeleton && (ref ? (
+          {landmarksOnly ? (
+            <p className="muted small">No video available yet: this is the recorded hand (21 landmark points).</p>
+          ) : (
+            <button className="chip small" aria-pressed={skeleton} onClick={() => setSkeleton((v) => !v)}>
+              {skeleton ? "Hide landmarks" : "Show landmarks"}
+            </button>
+          )}
+          {showSkeleton && (ref ? (
             <>
               <SkeletonPlayer frames={ref.frames} size={size} mirror={mirror} label={`Reference landmarks for ${sign.label}`} />
               <p className="muted small">

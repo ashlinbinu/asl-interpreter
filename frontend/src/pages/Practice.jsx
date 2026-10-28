@@ -75,6 +75,18 @@ export default function Practice({ initialSignId, initialSentence }) {
     api.sign(s.id).then(setSel).catch((e) => setErr(e.message));
   };
 
+  const removeOwn = async () => {
+    if (!window.confirm(`Delete '${sel.label}'? This cannot be undone.`)) return;
+    setErr("");
+    try {
+      await api.deleteSign(sel.id);
+      const data = await api.signs("", "user");
+      setList(data);
+      pick(data[0]);
+      loadProgress();
+    } catch (e) { setErr(`Could not delete "${sel.label}": ${e.message}`); }
+  };
+
   const onSegment = async ({ frames }) => {
     if (!sel || busy) return;
     setBusy(true); setErr("");
@@ -133,7 +145,10 @@ export default function Practice({ initialSignId, initialSentence }) {
           <div style={{ marginTop: "1.2rem" }}>
             <div className="head-row">
               <h3>Reference: <span className="hl">{sel.label}</span></h3>
-              <button className="speak-btn" onClick={() => speak(sel.label)}>🔊</button>
+              <span className="inline">
+                {isOwnSign && <button className="chip small danger" onClick={removeOwn} aria-label={`Delete ${sel.label}`}>Delete</button>}
+                <button className="speak-btn" onClick={() => speak(sel.label)}>🔊</button>
+              </span>
             </div>
             <ReferencePanel sign={sel} />
           </div>
@@ -150,10 +165,13 @@ export default function Practice({ initialSignId, initialSentence }) {
                 <button className={capture === "hold" ? "on" : ""} onClick={() => setCapture("hold")}>Hold to record</button>
               </div>
             </div>
-            {isMotionLetter && (
-              <p className="banner">{sel.label} is a motion letter and isn't scored yet: that needs a model trained on
-                several signers' motion. Watch the reference video and copy it.</p>
-            )}
+            {isMotionLetter && (sel.has_video ? (
+              <p className="muted small">{sel.label} moves: sign it once, then pause. It is scored on the handshape and the
+                path of your {sel.label === "J" ? "little finger" : "index finger"}, compared with the reference video (one
+                real signer, so an estimate, not verified).</p>
+            ) : (
+              <p className="banner">{sel.label} can't be scored yet: it needs the letter reference videos (see README).</p>
+            ))}
             {isOwnSign && (sel.reference_clips > 0 ? (
               <p className="muted small">Scored against your own recording: DTW per component (handshape, orientation,
                 location, movement), calibrated on real signers' repeats. An estimate, not verified on your signs.</p>

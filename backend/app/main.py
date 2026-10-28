@@ -20,6 +20,8 @@ from . import features as fx
 from . import mediapipe_models
 from .clip_scoring import NoUsableReference, clip_scorer
 from .clipstore import load_clip, quality, save_clip
+from .motion_letters import TIPS as MOTION_TIPS
+from .motion_letters import NoMotionReference, motion_scorer
 from .config import get_settings
 from .content import letter_hint
 from .db import (Attempt, Learner, ReferenceClip, ReferenceImage, ReferenceVideo, Session, Sign, check_connection,
@@ -32,6 +34,7 @@ from .text_plan import plan
 
 logger = logging.getLogger("asl.api")
 settings = get_settings()
+API_VERSION = 7                      # bump when the frontend needs new endpoints; the page checks it
 MASTERY_SCORE, MASTERY_OF_LAST = 80.0, (3, 4)
 REVIEW_DAYS = (0, 1, 2, 4, 7)      # Leitner box -> days until the sign is due again
 
@@ -196,6 +199,7 @@ def _decode_image(data: str):
 def health():
     return {
         "ok": True,
+        "api_version": API_VERSION,
         "database": check_connection(),
         "models": models.status(),
         "feature_spec": fx.SPEC_VERSION,
@@ -483,12 +487,24 @@ def score(body: ScoreIn):
         out = {"score": pct, "components": {}, "hints": ["DEV ONLY: compared against a synthetic template."],
                "feedback": _feedback(pct), "predicted": None, "sign_label": e.label,
                "method": "legacy_synthetic_dtw", "model_version": None}
+    elif e.category == "alphabet" and e.label.upper() in MOTION_TIPS:
+        # J and Z: handshape + fingertip path against the reference video (app/motion_letters.py).
+        try:
+            r = motion_scorer.score(frames, e.label, body.left_handed)
+        except NoHandError as err:
+            raise HTTPException(422, str(err)) from err
+        except NoMotionReference:
+            raise HTTPException(409, f"'{e.label}' can't be scored yet: it needs the letter reference videos. Run "
+                                     "python -m scripts.datasets.ingest_commons_alphabet, then restart the API.") from None
+        out = {"score": r["score"], "components": r["components"], "hints": r["hints"],
+               "feedback": _feedback(r["score"]), "highlight": r["highlight"], "predicted": None,
+               "sign_label": e.label, "method": "motion_letter_handshape_path (vs one reference signer; unverified)",
+               "model_version": None}
     elif e.category == "alphabet":
         # Comparing with a recording can't tell letters apart (a different letter by the same signer scores a median
-        # of ~94 against a letter's reference), so letters without a trained model (J, Z) are not scored.
-        raise HTTPException(409, f"'{e.label}' isn't scored yet: it needs a model trained on several signers' "
-                                 "motion, and comparing with one recording can't tell letters apart. Watch the "
-                                 "reference video and copy it.")
+        # of ~94 against a letter's reference), so other letters are only scored by the alphabet model.
+        raise HTTPException(503, f"'{e.label}' can't be scored: the alphabet model is not trained yet "
+                                 "(python -m scripts.train_alphabet).")
     else:
         # No trained model covers this sign (custom signs): DTW against its own clips.
         try:
