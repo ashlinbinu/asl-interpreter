@@ -47,7 +47,7 @@ def banner(img, text, sub=""):
     cv2.putText(disp, text, (12, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 230, 255), 2)
     if sub:
         cv2.putText(disp, sub, (12, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (220, 220, 220), 1)
-    cv2.imshow("Handspeak recorder", disp)
+    cv2.imshow("Sign-ify recorder", disp)
     return cv2.waitKey(1) & 0xFF
 
 

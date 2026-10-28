@@ -1,6 +1,6 @@
 @echo off
 echo ========================================================
-echo   Launching ASL Interpreter (Handspeak AI)
+echo   Launching ASL Interpreter (Sign-ify)
 echo ========================================================
 echo 1. Launching Backend on http://127.0.0.1:8000 ...
 start "ASL Backend" cmd /k "cd /d "%~dp0backend" && if exist .venv\Scripts\activate.bat (call .venv\Scripts\activate.bat) && python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log"

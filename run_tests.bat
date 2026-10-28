@@ -1,6 +1,6 @@
 @echo off
 echo ========================================================
-echo   Handspeak tests (backend pytest incl. JS/Python parity)
+echo   Sign-ify tests (backend pytest incl. JS/Python parity)
 echo ========================================================
 cd /d "%~dp0backend"
 if exist ".venv\Scripts\activate.bat" (

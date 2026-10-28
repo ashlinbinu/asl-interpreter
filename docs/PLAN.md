@@ -1,4 +1,4 @@
-# Handspeak → ASL learning coach: audit and implementation plan
+# Sign-ify (formerly Handspeak) → ASL learning coach: audit and implementation plan
 
 Status (2026-10-28), on branch `feature/learning-coach`:
 - **P0 done.** Python↔JS feature parity is tested exactly.

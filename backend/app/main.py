@@ -50,7 +50,7 @@ async def lifespan(_app):
 
 
 app = FastAPI(
-    title="Handspeak API",
+    title="Sign-ify API",
     description="ASL learning coach: recognition, practice scoring and text-to-sign glossing. "
                 "A learning aid, not a certified translator; scores are estimates.",
     version="3.0.0",

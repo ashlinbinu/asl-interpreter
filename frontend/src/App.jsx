@@ -68,7 +68,7 @@ export default function App() {
       <a href="#main" className="skip">Skip to content</a>
       <header>
         <div className="brand-group">
-          <h1>Hand<span>speak</span></h1>
+          <h1>Sign-<span>ify</span></h1>
           <div className="status-pill-group">
             {up
               ? <span className="badge ok">● {status.database.signs_count} signs</span>
@@ -106,7 +106,7 @@ export default function App() {
         )}
       </main>
       <footer className="muted small">
-        Handspeak is a learning aid, not a certified ASL translator. Scores are estimates; facial grammar and other
+        Sign-ify is a learning aid, not a certified ASL translator. Scores are estimates; facial grammar and other
         non-manual markers are only partly captured. Learn from Deaf signers whenever you can.
       </footer>
     </div>

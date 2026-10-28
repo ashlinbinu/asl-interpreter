@@ -1,9 +1,9 @@
-# Handspeak: ASL learning coach
+# Sign-ify: ASL learning coach
 
-Handspeak is a local web app for **learning** American Sign Language. You can type text and see each sign,
+Sign-ify is a local web app for **learning** American Sign Language. You can type text and see each sign,
 practise with live feedback from your webcam, and sign to the camera to get the nearest matches.
 
-> **Honest scope.** Handspeak is a learning aid, not a certified ASL translator. Scores are estimates. Text → sign
+> **Honest scope.** Sign-ify is a learning aid, not a certified ASL translator. Scores are estimates. Text → sign
 > is word-by-word glossing, not ASL grammar, and facial grammar (non-manual markers) is only partly captured. Several
 > datasets it can use are **non-commercial** (see [docs/DATASET.md](docs/DATASET.md)).
 
