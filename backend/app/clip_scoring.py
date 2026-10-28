@@ -42,7 +42,8 @@ def calibrated(cal, dists) -> tuple[dict, float]:
     s = [float(1 - np.searchsorted(cal["neg_quantiles"][g], dists[g]) / (len(cal["neg_quantiles"][g]) - 1))
          for g in COMPONENTS]
     x = np.array([np.mean(s)]) if cal.get("combine") == "mean_of_components" else np.array(s)
-    score = 100 / (1 + np.exp(-(x @ np.array(cal["coef"]) + cal["intercept"])))
+    p = 1 / (1 + np.exp(-(x @ np.array(cal["coef"]) + cal["intercept"])))
+    score = 100 * min(p / cal.get("perfect_probability", 1.0), 1.0)      # a perfect match scores 100
     return {g: round(v * 100, 1) for g, v in zip(COMPONENTS, s)}, round(float(score), 1)
 
 

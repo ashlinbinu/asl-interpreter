@@ -58,10 +58,13 @@ def test_anchors_and_calibration_are_monotone():
     for g, (pos, neg) in ANCHORS.items():
         assert anchored(g, pos) == 75.0 and anchored(g, neg) == 25.0 and anchored(g, 0.0) > 75.0
     for combine, coef in (("all_components", [0.0, 2.6, 2.3, 0.0, 0.6]), ("mean_of_components", [5.0])):
+        # Perfect match: every input is 1 (all five, or their mean), so the logit is sum(coef) + intercept.
         cal = {"neg_quantiles": {g: np.linspace(0.2, 2.0, 101).tolist() for g in COMPONENTS},
-               "combine": combine, "coef": coef, "intercept": -3.7}
+               "combine": combine, "coef": coef, "intercept": -3.7,
+               "perfect_probability": 1 / (1 + np.exp(-(sum(coef) - 3.7)))}
         totals = [calibrated(cal, {g: d for g in COMPONENTS})[1] for d in (0.1, 0.5, 1.0, 1.5, 2.5)]
         assert totals == sorted(totals, reverse=True)       # farther from the recording never scores higher
+        assert totals[0] == 100.0                           # a perfect match scores 100
         pct, _ = calibrated(cal, {g: 0.1 for g in COMPONENTS})
         assert all(v == 100.0 for v in pct.values())
 

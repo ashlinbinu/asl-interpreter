@@ -34,7 +34,7 @@ logistic(target probability + DTW component percentiles), fitted on val signers.
 
 Signs with recordings but no trained model are scored by DTW against their own clips. Calibrated on the same person making a different sign (`scripts.calibrate_own_clip`), fitted on train + val signers (combination `all_components`, chosen by signer-grouped CV AUC: all_components 0.827, mean_of_components 0.795).
 
-Proxy test on held-out ASL Citizen signers, same signer repeating a word vs the same signer making a different word: **AUC 0.841** (91 repeat / 657 different-sign pairs); median score 80.5 vs 26.4. Single components: handshape 0.84, orientation 0.87, location 0.78, movement 0.67, two_hand 0.71. **Unverified on your own custom signs**: no held-out data exists for them.
+Proxy test on held-out ASL Citizen signers, same signer repeating a word vs the same signer making a different word: **AUC 0.841** (91 repeat / 657 different-sign pairs); median score 93.0 vs 30.5. Single components: handshape 0.84, orientation 0.87, location 0.78, movement 0.67, two_hand 0.71. **Unverified on your own custom signs**: no held-out data exists for them.
 
 ## Alphabet (24 static letters)
 
@@ -61,10 +61,10 @@ DTW runs on **numba**.
 
 | Step | Time |
 |---|---|
-| Features for one clip (FEATURE_SPEC, Python; ~58 frames) | 21.6 ms |
-| Word classification (numpy) | 3.2 ms |
-| Word score incl. DTW vs 5 references (numpy) | 34.7 ms |
-| Word classification in JavaScript (Node, same code as the browser) | 8.9 ms |
+| Features for one clip (FEATURE_SPEC, Python; ~58 frames) | 21.5 ms |
+| Word classification (numpy) | 3.8 ms |
+| Word score incl. DTW vs 5 references (numpy; DTW on numba) | 33.7 ms |
+| Word classification in JavaScript (Node, same code as the browser) | 10.8 ms |
 
 MediaPipe landmark extraction offline: ~60 ms/frame per process on this CPU (hand ≈33, pose ≈22); throughput 38 frames/s with 3 processes (PLAN.md P2).
 Browser FPS and end-to-end live latency were **not measured**: no browser with a webcam was available in this environment. The camera shows its FPS live.

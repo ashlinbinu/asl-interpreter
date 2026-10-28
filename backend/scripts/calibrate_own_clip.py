@@ -10,7 +10,9 @@ Each component distance becomes "share of same-person different-sign distances a
 signers). The score must never rise when a component gets worse, so only monotone combinations are considered:
 a logistic regression on all five with non-negative weights, or their plain mean through a one-input logistic
 curve. They are compared by signer-grouped cross-validation on the fitting signers only; the winner is refitted
-on train + validation signers and evaluated once on the held-out test signers (ROC AUC). This measures the method on real signers'
+on train + validation signers and evaluated once on the held-out test signers (ROC AUC). Scores are divided by
+the model's value for a perfect match (every component closer than all different signs), so a perfect match is
+100; this is monotone, so the AUC is unchanged. This measures the method on real signers'
 repeats; it is not a measurement on your own custom signs.
 """
 import argparse
@@ -117,9 +119,10 @@ def calibrate(wm: WordModel, clips, seed=0, log=print) -> dict:
         cv[name] = round(float(roc_auc_score(y, scores)), 4)
     combine = max(cv, key=cv.get)
     lr = MonotoneLogistic().fit(inputs[combine](X), y)
+    p_perfect = float(lr.predict_proba(inputs[combine](np.ones((1, len(COMPONENTS)))))[0, 1])
     Xt = np.array([survival(qs, d) for d, _, _ in test])
     yt = np.array([y for _, y, _ in test])
-    st = lr.predict_proba(inputs[combine](Xt))[:, 1]
+    st = np.minimum(lr.predict_proba(inputs[combine](Xt))[:, 1] / p_perfect, 1.0)
     metrics = {
         "combine": combine, "cv_auc_on_fit_signers": cv,
         "eval_protocol": "ASL Citizen test signers (held out of the fit): same signer repeating a word vs the same "
@@ -136,6 +139,7 @@ def calibrate(wm: WordModel, clips, seed=0, log=print) -> dict:
         f"pairs); median score {metrics['test_score_median']}")
     return {"version": wm.version, "components": list(COMPONENTS), "neg_quantiles": qs, "combine": combine,
             "coef": np.round(lr.coef_, 5).tolist(), "intercept": round(float(lr.intercept_), 5),
+            "perfect_probability": round(p_perfect, 5),
             "metrics": metrics, "created_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
 
 
