@@ -47,6 +47,12 @@ export default function ReferencePanel({ signId, sign: given, compact = false })
                  style={{ maxWidth: size * 1.4 }} aria-label={`Reference video for ${sign.label}`}
                  ref={video} onLoadedMetadata={keepRate} onPlay={keepRate} />
           <figcaption className="muted small">{sign.attribution || "Reference video"} · {sign.license}</figcaption>
+          {sign.reference_image_url && sign.kind === "static" && (
+            <div className="ref-still">
+              <img src={mediaUrl(sign.reference_image_url)} alt={`Photo of the handshape for ${sign.label}`} />
+              <span className="muted small">Handshape photo: {sign.image_attribution} · {sign.image_license}</span>
+            </div>
+          )}
         </>
       ) : sign.reference_image_url ? (
         <>

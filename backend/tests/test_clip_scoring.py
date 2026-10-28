@@ -74,19 +74,26 @@ def _letter_id(client, label):
                 if s["label"] == label)
 
 
-def test_no_recording_gives_a_friendly_message(client):
-    r = client.post("/api/score", json={"sign_id": _letter_id(client, "Z"), "frames": synth.sign_clip(seed=1)})
+def test_custom_sign_without_recording_gives_a_friendly_message(client):
+    from app.db import ReferenceClip, Session
+    sid = client.post("/api/signs", json={"label": "no take test", "frames": synth.sign_clip(seed=2),
+                                          "learner_id": LEARNER}).json()["id"]
+    with Session() as s:                      # like the old custom signs that lost their recording
+        s.query(ReferenceClip).filter(ReferenceClip.sign_id == sid).delete()
+        s.commit()
+    from app.clip_scoring import clip_scorer
+    clip_scorer.invalidate(sid)
+    r = client.post("/api/score", json={"sign_id": sid, "frames": synth.sign_clip(seed=1)})
     assert r.status_code == 409
     msg = r.json()["detail"]
-    assert "no recording of 'Z'" in msg and "Record page" in msg and "P2" not in msg
+    assert "no recording of 'no take test'" in msg and "Add a sign" in msg and "P2" not in msg
 
 
-def test_recording_a_motion_letter_makes_it_scorable(client):
+def test_motion_letters_are_not_scored_even_with_a_recording(client):
     jid = _letter_id(client, "J")
     take = synth.sign_clip(seed=31, path="chest_circle")
     up = client.post("/api/recordings", data={"meta": json.dumps({"sign_id": jid, "signer_id": "me_01"})},
                      files={"landmarks": ("l.json", json.dumps(take), "application/json")})
     assert up.status_code == 200, up.text
     r = client.post("/api/score", json={"sign_id": jid, "frames": synth.sign_clip(seed=32, path="chest_circle")})
-    assert r.status_code == 200, r.text
-    assert "recordings of this sign" in r.json()["method"]
+    assert r.status_code == 409 and "isn't scored yet" in r.json()["detail"]

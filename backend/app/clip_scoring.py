@@ -1,5 +1,5 @@
-"""Scoring for signs that have real reference clips but no trained model: custom signs, and letters or words you
-recorded yourself (e.g. J and Z on the Record page).
+"""Scoring for signs that have real reference clips but no trained model: custom signs. (Letters are not scored
+this way: against a letter's reference, a different letter by the same signer scores a median of ~94.)
 
 The attempt is aligned with each of the sign's own clips by banded DTW (word_model.dtw_path) and compared per
 component (handshape, orientation, location, movement, two hands; FEATURE_SPEC §7). Your attempt is compared with

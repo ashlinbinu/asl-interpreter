@@ -7,9 +7,9 @@ Only sources whose license allows copying the images are used (PHOTO_SOURCES): t
 (GPL 2). ChicagoFSVid is not used: no license is stated, and its frames are 128x128 grayscale hand crops.
 Candidates are ingested clips whose original photo is still on disk (<root>/<LETTER>/<file>). Each is ranked
 within its letter by hand-detection confidence, how centred the hand is, hand size, sharpness, brightness and
-contrast; photos with no hand, two hands or a hand touching the edge are skipped. The chosen clip becomes the
-sign's canonical clip, so the optional skeleton view shows the same hand. Signs left with neither a video nor a
-photo are listed in the report.
+contrast; photos with no hand, two hands or a hand touching the edge are skipped. If the sign has no reference
+video, the chosen clip becomes its canonical clip, so the optional skeleton view shows the same hand. Signs left
+with neither a video nor a photo are listed in the report.
 """
 import argparse
 import json
@@ -112,8 +112,9 @@ def build(root: Path, force=False, log=print) -> dict:
                 s.add(current)
             current.clip_id, current.path, current.width, current.height = clip.id, rel, w, h
             current.license, current.attribution, current.source_url = clip.license, clip.attribution, clip.source_url
-            for c in s.query(ReferenceClip).filter(ReferenceClip.sign_id == sign.id):
-                c.is_canonical = c.id == clip.id
+            if not s.query(ReferenceVideo).filter(ReferenceVideo.sign_id == sign.id).count():
+                for c in s.query(ReferenceClip).filter(ReferenceClip.sign_id == sign.id):
+                    c.is_canonical = c.id == clip.id
             report["published"].append({"sign": sign.label, "clip_id": clip.id, "photo": src.name, "path": rel,
                                         "candidates": len(cands), **{k: round(v, 3) for k, v in m.items()}})
             log(f"{sign.label}: {src.name} of {len(cands)} candidates -> /media/{rel} ({clip.license})")

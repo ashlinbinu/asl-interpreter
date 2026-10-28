@@ -483,16 +483,20 @@ def score(body: ScoreIn):
         out = {"score": pct, "components": {}, "hints": ["DEV ONLY: compared against a synthetic template."],
                "feedback": _feedback(pct), "predicted": None, "sign_label": e.label,
                "method": "legacy_synthetic_dtw", "model_version": None}
+    elif e.category == "alphabet":
+        # Comparing with a recording can't tell letters apart (a different letter by the same signer scores a median
+        # of ~94 against a letter's reference), so letters without a trained model (J, Z) are not scored.
+        raise HTTPException(409, f"'{e.label}' isn't scored yet: it needs a model trained on several signers' "
+                                 "motion, and comparing with one recording can't tell letters apart. Watch the "
+                                 "reference video and copy it.")
     else:
-        # No trained model covers this sign (custom signs, letters you recorded yourself): DTW against its own clips.
+        # No trained model covers this sign (custom signs): DTW against its own clips.
         try:
             r = clip_scorer.score(frames, e.id, e.label, body.left_handed, models.words)
         except NoHandError as err:
             raise HTTPException(422, str(err)) from err
         except NoUsableReference:
-            where = ("re-record it on “Add a sign”" if e.category == "user"
-                     else "record it on the Record page" + (" (J and Z as 3-second takes)" if e.kind == "dynamic"
-                                                            and e.category == "alphabet" else ""))
+            where = "re-record it on “Add a sign”" if e.category == "user" else "record it on the Record page"
             raise HTTPException(409, f"There is no recording of '{e.label}' to compare with yet, so it can't be "
                                      f"scored. To practise it with feedback, {where}.") from None
         own = "your own recording" if e.category == "user" else "the recordings of this sign"

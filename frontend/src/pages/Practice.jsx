@@ -40,6 +40,8 @@ export default function Practice({ initialSignId, initialSentence }) {
   const letters = useLiveLetters(isStaticLetter);
   const words = useLiveWords(isWord && wordsReady);
   const live = isStaticLetter ? letters : words;
+  // Words outside the word classifier are scored by DTW against real signers' recordings only.
+  const inWordModel = isWord && !!words.model?.classes?.includes(sel?.label);
 
   const loadProgress = () => api.progress().then((p) => setProgress(Object.fromEntries(p.signs.map((s) => [s.sign_id, s])))).catch(() => {});
   useEffect(() => { loadProgress(); }, []);
@@ -148,13 +150,10 @@ export default function Practice({ initialSignId, initialSentence }) {
                 <button className={capture === "hold" ? "on" : ""} onClick={() => setCapture("hold")}>Hold to record</button>
               </div>
             </div>
-            {isMotionLetter && (sel.reference_clips > 0 ? (
-              <p className="muted small">{sel.label} is scored against your own recordings of it (DTW per component; an
-                estimate, not verified).</p>
-            ) : (
-              <p className="banner">{sel.label} is a motion letter with no recording yet, so it can't be scored. Record it
-                on the Record page (3-second takes); after that it is scored against your recordings.</p>
-            ))}
+            {isMotionLetter && (
+              <p className="banner">{sel.label} is a motion letter and isn't scored yet: that needs a model trained on
+                several signers' motion. Watch the reference video and copy it.</p>
+            )}
             {isOwnSign && (sel.reference_clips > 0 ? (
               <p className="muted small">Scored against your own recording: DTW per component (handshape, orientation,
                 location, movement), calibrated on real signers' repeats. An estimate, not verified on your signs.</p>
@@ -166,14 +165,17 @@ export default function Practice({ initialSignId, initialSentence }) {
               <p className="banner">Words are scored once the word model is trained
                 (<code>python -m scripts.train_words</code>). You can still practise against the reference.</p>
             )}
-            {isWord && wordsReady && (
+            {isWord && wordsReady && (inWordModel ? (
               <p className="muted small">Sign once, then pause: your attempt is compared with real signers' productions
                 (handshape, palm orientation, location, movement).</p>
-            )}
+            ) : (
+              <p className="muted small">Sign once, then pause. {sel.label} isn't one of the words the classifier knows,
+                so your attempt is compared by DTW with real signers' recordings of it (an estimate, not verified).</p>
+            ))}
             <Camera mode={capture} kind={isStaticLetter ? "static" : "dynamic"} onFrame={live.onFrame}
                     onSegment={onSegment} disabled={busy} holdLabel={`Hold to sign "${sel.label}"`}
                     highlight={res?.highlight} />
-            {(isStaticLetter || (isWord && wordsReady && live.ready)) && (
+            {(isStaticLetter || (inWordModel && live.ready)) && (
               <div className="live-box" aria-live="polite">
                 {live.error ? <p className="error">{live.error}</p> : (
                   <>

@@ -4,3 +4,4 @@
 -r requirements.txt
 torch==2.14.*        # scripts/train_words.py (1D-CNN / BiGRU word model)
 h5py==3.*            # scripts/datasets/ingest_chicago_fsvid.py (MATLAB 7.3 files)
+imageio-ffmpeg==0.7.*  # scripts/datasets/ingest_commons_alphabet.py (cuts and encodes H.264 letter clips)

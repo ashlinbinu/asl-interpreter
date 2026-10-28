@@ -98,6 +98,8 @@ figure { margin:0; } figcaption { margin-top:.4rem; font-weight:600; color:var(-
 .ref-photo { display:block; width:100%; border-radius:12px; border:1px solid var(--line); background:#000; }
 .media-missing { display:flex; flex-direction:column; gap:.35rem; justify-content:center; align-items:center; text-align:center; aspect-ratio:4/3; padding:1rem; border:1px dashed var(--line); border-radius:12px; background:var(--panel); }
 .media-missing b { color:var(--neon); } .media-missing span { color:var(--muted); font-size:.85rem; }
+.ref-still { display:flex; gap:.6rem; align-items:center; margin-top:.4rem; }
+.ref-still img { width:88px; height:88px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
 .skeleton-toggle { display:flex; flex-direction:column; gap:.4rem; align-items:flex-start; margin-top:.5rem; }
 .speed { display:flex; gap:.3rem; margin-top:.5rem; }
 .subnav.slim { border:0; padding:0; margin:0; }
