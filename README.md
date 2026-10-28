@@ -79,6 +79,9 @@ previous version is upgraded in place: the old templates are kept but tagged `sy
 
    This prints the per-class hand-detection rate and drops images without a detected hand.
    *Images with landmarks already drawn on them (e.g. cvzone exports) don't work: MediaPipe can't detect hands in them.*
+   To show a real photo for each letter (letters have no video), publish the cleanest, centred photo per letter:
+   `python -m scripts.build_reference_images` (uses `DATA_DIR` from `backend/.env`, or pass `--root`). It lists the
+   signs that have neither a video nor a photo.
 3. **Train the alphabet model:**
 
    ```powershell
@@ -181,9 +184,9 @@ backend/
                  inference + DTW scoring) · registry.py · text_plan.py · clipstore.py · content.py (hints) ·
                  config.py · db.py · vocabulary.py (50 words, gloss matching) · remote_zip.py (HTTP-range zip reader)
   app/legacy/    old synthetic templates, v0 features, v0 DTW (dev fallback only)
-  migrations/    Alembic (0001 legacy baseline, 0002 coach schema)
+  migrations/    Alembic (0001 legacy baseline, 0002 coach schema, 0003 reference photos)
   scripts/       download_models · train_alphabet · train_words · evaluation_report · record_cli ·
-                 build_reference_videos · dataset_report · seed_dev_synthetic ·
+                 build_reference_videos · build_reference_images · dataset_report · seed_dev_synthetic ·
                  datasets/ (inspect_asl_citizen, ingest_asl_citizen, ingest_chicago_fsvid, ingest_alphabet_images, …)
   tests/         pytest suite
 frontend/src/

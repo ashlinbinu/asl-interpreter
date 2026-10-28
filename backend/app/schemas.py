@@ -46,6 +46,7 @@ class Match(BaseModel):
     confidence: float
     sign_id: Optional[int]
     reference_video_url: Optional[str]
+    reference_image_url: Optional[str] = None
 
 
 class RecognizeOut(BaseModel):

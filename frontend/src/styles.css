@@ -84,11 +84,17 @@ figure { margin:0; } figcaption { margin-top:.4rem; font-weight:600; color:var(-
 .chip.mastered { border-color:var(--green); }
 .chip .count { margin-left:.3rem; font-size:.65rem; color:var(--muted); }
 .chip.on .count { color:#333; }
-.row.match { grid-template-columns:minmax(40px,1fr) 2fr 48px auto; }
+.row.match { grid-template-columns:56px minmax(40px,1fr) 2fr 48px auto; }
+.thumb { width:56px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--line); background:#000; display:block; }
+.thumb.none { display:flex; align-items:center; justify-content:center; font-size:.65rem; color:var(--muted); }
 .timeline, .examples { display:flex; flex-wrap:wrap; gap:.4rem; margin:1rem 0 .5rem; align-items:center; }
 .card { margin-top:1rem; padding:1rem; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
 .reference { margin:0; } .reference video { width:100%; border-radius:12px; border:1px solid var(--line); background:#000; }
 .desc { margin:.5rem 0 0; }
+.ref-photo { display:block; width:100%; border-radius:12px; border:1px solid var(--line); background:#000; }
+.media-missing { display:flex; flex-direction:column; gap:.35rem; justify-content:center; align-items:center; text-align:center; aspect-ratio:4/3; padding:1rem; border:1px dashed var(--line); border-radius:12px; background:var(--panel); }
+.media-missing b { color:var(--neon); } .media-missing span { color:var(--muted); font-size:.85rem; }
+.skeleton-toggle { display:flex; flex-direction:column; gap:.4rem; align-items:flex-start; margin-top:.5rem; }
 .speed { display:flex; gap:.3rem; margin-top:.5rem; }
 .subnav.slim { border:0; padding:0; margin:0; }
 .preview { max-width:220px; margin-top:1rem; border-radius:8px; border:1px solid var(--line); }
@@ -102,6 +108,7 @@ footer { margin-top:3rem; border-top:1px solid var(--line); padding-top:1rem; }
 .seq-stage { position:relative; aspect-ratio:4/3; max-width:560px; background:#000; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
 .seq-video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; opacity:0; transition:opacity .15s ease; }
 .seq-video.on { opacity:1; }
+.seq-photo { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#000; }
 .seq-card { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.4rem; }
 .seq-card span { font:800 4.5rem "Bricolage Grotesque", sans-serif; color:var(--neon); }
 .seq-card.card span { font-size:2.2rem; }

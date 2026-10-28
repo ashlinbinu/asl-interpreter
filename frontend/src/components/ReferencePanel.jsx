@@ -2,10 +2,22 @@ import { useEffect, useState } from "react";
 import SkeletonPlayer from "./SkeletonPlayer.jsx";
 import { api, mediaUrl } from "../api.js";
 
-/** Shows the best real reference for a sign: video (with attribution) > real landmark recording > description. */
+function missingReason(sign) {
+  if (sign.category === "alphabet" && sign.kind === "dynamic") {
+    return `${sign.label} is a motion letter and needs a video; none from real signers is available yet.`;
+  }
+  if (sign.category === "user") return "Your own sign has a landmark recording only (use “Show landmarks”).";
+  return "No real recording of this sign is available yet.";
+}
+
+/**
+ * The reference for learning a sign: the real video of a human signer, else a real photo of the handshape (letters),
+ * else a clear "No video available yet" placeholder. The landmark skeleton is an optional secondary view.
+ */
 export default function ReferencePanel({ signId, sign: given, compact = false, speed = 1 }) {
   const [sign, setSign] = useState(given || null);
   const [mirror, setMirror] = useState(false);
+  const [skeleton, setSkeleton] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -28,21 +40,39 @@ export default function ReferencePanel({ signId, sign: given, compact = false, s
                  ref={(v) => { if (v) v.playbackRate = speed; }} />
           <figcaption className="muted small">{sign.attribution || "Reference video"} · {sign.license}</figcaption>
         </>
-      ) : ref ? (
+      ) : sign.reference_image_url ? (
         <>
-          <SkeletonPlayer frames={ref.frames} size={size} mirror={mirror} speed={speed} label={`Reference landmarks for ${sign.label}`} />
-          <figcaption className="muted small">
-            Real landmarks: {ref.source} signer {ref.signer_id}{ref.license ? ` · ${ref.license}` : ""}
-            <label className="inline-check"><input type="checkbox" checked={mirror} onChange={(e) => setMirror(e.target.checked)} /> mirror</label>
-          </figcaption>
-        </>
-      ) : sign.frames ? (
-        <>
-          <SkeletonPlayer frames={sign.frames} size={size} label={`Synthetic placeholder for ${sign.label}`} />
-          <figcaption className="warn small">DEV synthetic placeholder: not real signing.</figcaption>
+          <img src={mediaUrl(sign.reference_image_url)} className="ref-photo" style={{ maxWidth: size }}
+               alt={`Photo of the handshape for ${sign.label}`} />
+          <figcaption className="muted small">Photo: {sign.image_attribution} · {sign.image_license}</figcaption>
         </>
       ) : (
-        <p className="muted">No reference recording yet for <b>{sign.label}</b>. Add one on the Record page.</p>
+        <div className="media-missing" role="img" aria-label={`No video available yet for ${sign.label}`}
+             style={{ maxWidth: size * 1.4 }}>
+          <b>No video available yet</b>
+          <span>{missingReason(sign)}</span>
+        </div>
+      )}
+      {(ref || sign.frames) && (
+        <div className="skeleton-toggle">
+          <button className="chip small" aria-pressed={skeleton} onClick={() => setSkeleton((v) => !v)}>
+            {skeleton ? "Hide landmarks" : "Show landmarks"}
+          </button>
+          {skeleton && (ref ? (
+            <>
+              <SkeletonPlayer frames={ref.frames} size={size} mirror={mirror} speed={speed} label={`Reference landmarks for ${sign.label}`} />
+              <p className="muted small">
+                Real landmarks: {ref.source} signer {ref.signer_id}{ref.license ? ` · ${ref.license}` : ""}
+                <label className="inline-check"><input type="checkbox" checked={mirror} onChange={(e) => setMirror(e.target.checked)} /> mirror</label>
+              </p>
+            </>
+          ) : (
+            <>
+              <SkeletonPlayer frames={sign.frames} size={size} label={`Synthetic placeholder for ${sign.label}`} />
+              <p className="warn small">DEV synthetic placeholder: not real signing.</p>
+            </>
+          ))}
+        </div>
       )}
       {sign.description && <p className="desc">{sign.description}</p>}
     </figure>

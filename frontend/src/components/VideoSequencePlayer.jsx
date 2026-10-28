@@ -1,19 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../api.js";
 
-const LETTER_MS = 900;    // a fingerspelled letter card at 1x
+const LETTER_MS = 900;    // a fingerspelled letter (photo or card) at 1x
 const CARD_MS = 1600;     // a known sign without a reference video yet
 
-/** Plan entries (POST /api/text-to-sign) -> playable items: one per sign, one per fingerspelled letter. */
+const media = (m) => (m.video_url ? { kind: "video", url: mediaUrl(m.video_url) }
+  : m.image_url ? { kind: "photo", url: mediaUrl(m.image_url) } : null);
+
+/**
+ * Plan entries (POST /api/text-to-sign) -> playable items: one per sign, one per fingerspelled letter.
+ * Real media first: video, else a photo of the handshape; without either the item is a "no video yet" card.
+ */
 export function sequenceItems(entries) {
   const items = [];
   (entries || []).forEach((e, entry) => {
     if (e.fingerspelled) {
       e.letters.forEach((L, letter) => items.push({
-        kind: L.video_url ? "video" : "letter", text: L.letter, url: mediaUrl(L.video_url), entry, letter, word: e.word,
+        kind: "letter", text: L.letter, ...media(L), spelled: true, entry, letter, word: e.word, ms: LETTER_MS,
+        attribution: L.attribution, license: L.license,
       }));
     } else {
-      items.push({ kind: e.video_url ? "video" : "card", text: e.gloss, url: mediaUrl(e.video_url), entry, word: e.word,
+      items.push({ kind: "card", text: e.gloss, ...media(e), entry, word: e.word, ms: CARD_MS,
                    attribution: e.attribution, license: e.license });
     }
   });
@@ -66,7 +73,7 @@ export default function VideoSequencePlayer({ entries, onActive }) {
       return () => v.removeEventListener("loadeddata", start);
     }
     vids[frontRef.current].current?.pause();
-    if (playing) timer.current = setTimeout(advance, (item.kind === "letter" ? LETTER_MS : CARD_MS) / speed);
+    if (playing) timer.current = setTimeout(advance, item.ms / speed);
     return () => clearTimeout(timer.current);
   }, [i, items, replay, playing]);
 
@@ -90,7 +97,7 @@ export default function VideoSequencePlayer({ entries, onActive }) {
   const onEnded = (k) => () => { if (k === frontRef.current && playing) advance(); };
   const jump = (entry) => { setI(items.findIndex((it) => it.entry === entry)); setPlaying(true); setReplay((n) => n + 1); };
   const showVideo = item?.kind === "video";
-  const caption = item?.kind === "letter" ? `${item.text} (fingerspelling "${item.word}")`
+  const caption = item?.spelled ? `${item.text} (fingerspelling "${item.word}")`
     : item && item.word && item.word.toUpperCase().replace(/ /g, "-") !== item.text ? `${item.text} ("${item.word}")` : item?.text;
 
   return (
@@ -100,10 +107,13 @@ export default function VideoSequencePlayer({ entries, onActive }) {
           <video key={k} ref={vids[k]} muted playsInline preload="auto" onEnded={onEnded(k)}
                  className={`seq-video ${showVideo && front === k ? "on" : ""}`} aria-hidden={!(showVideo && front === k)} />
         ))}
-        {!showVideo && item && (
+        {item?.kind === "photo" && (
+          <img className="seq-photo" src={item.url} alt={`Photo of the handshape for ${item.text}`} />
+        )}
+        {(item?.kind === "letter" || item?.kind === "card") && (
           <div className={`seq-card ${item.kind}`} aria-hidden="true">
             <span>{item.text}</span>
-            <small>{item.kind === "letter" ? "fingerspell" : "no reference video yet"}</small>
+            <small>No video available yet</small>
           </div>
         )}
       </div>
@@ -126,7 +136,9 @@ export default function VideoSequencePlayer({ entries, onActive }) {
           </button>
         ))}
       </div>
-      {showVideo && item.attribution && <p className="muted small">{item.attribution} · {item.license}</p>}
+      {(showVideo || item?.kind === "photo") && item.attribution && (
+        <p className="muted small">{item.kind === "photo" ? "Photo: " : ""}{item.attribution} · {item.license}</p>
+      )}
       <p className="muted small">Keys: ←/→ previous/next · R replay · P play/pause</p>
     </div>
   );

@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import Camera from "../components/Camera.jsx";
 import ReferencePanel from "../components/ReferencePanel.jsx";
-import { api } from "../api.js";
+import { api, mediaUrl } from "../api.js";
 import { useLiveLetters } from "../lib/useLiveLetters.js";
 import { useLiveWords } from "../lib/useLiveWords.js";
 import { speak } from "../lib/speech.js";
 
-function Matches({ matches, rejectThreshold, onLearn, letterIds }) {
+/** Small real-media preview for a match: video (plays on hover), else photo, else a "no video" mark. */
+function Thumb({ s, label }) {
+  if (s?.reference_video_url) {
+    return <video className="thumb" src={`${mediaUrl(s.reference_video_url)}#t=0.8`} muted playsInline loop preload="metadata"
+                  aria-label={`Reference video for ${label}`} onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+                  onMouseLeave={(e) => e.currentTarget.pause()} />;
+  }
+  if (s?.reference_image_url) return <img className="thumb" src={mediaUrl(s.reference_image_url)} alt={`Handshape for ${label}`} />;
+  return <span className="thumb none" title="No video available yet">no video</span>;
+}
+
+function Matches({ matches, rejectThreshold, onLearn, media }) {
   if (!matches?.length) return null;
   const unsure = matches[0].confidence < rejectThreshold;
   return (
@@ -14,10 +25,11 @@ function Matches({ matches, rejectThreshold, onLearn, letterIds }) {
       {unsure && <p className="muted">Not sure yet: hold the handshape steady, facing the camera.</p>}
       {matches.map((m, i) => (
         <div key={m.label} className="row match">
+          <Thumb s={media[m.label.toLowerCase()] || m} label={m.label} />
           <span className={i === 0 && !unsure ? "best" : ""}>{m.label}</span>
           <div className="bar" aria-hidden="true"><i style={{ width: `${Math.round(m.confidence * 100)}%` }} /></div>
           <b>{Math.round(m.confidence * 100)}%</b>
-          <button className="chip small" onClick={() => onLearn(m.sign_id ?? letterIds[m.label], m.label)}
+          <button className="chip small" onClick={() => onLearn(m.sign_id ?? media[m.label.toLowerCase()]?.id, m.label)}
                   aria-label={`Learn the sign ${m.label}`}>Learn</button>
         </div>
       ))}
@@ -34,10 +46,11 @@ export default function Recognize({ go }) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState(null);
   const [focus, setFocus] = useState(null);
-  const [letterIds, setLetterIds] = useState({});
+  const [media, setMedia] = useState({});   // lower-case label -> sign (id + reference video/photo urls)
 
   useEffect(() => {
-    api.signs("", "alphabet").then((l) => setLetterIds(Object.fromEntries(l.map((s) => [s.label, s.id])))).catch(() => {});
+    Promise.all([api.signs("", "alphabet"), api.signs("", "word")])
+      .then((ls) => setMedia(Object.fromEntries(ls.flat().map((s) => [s.label.toLowerCase(), s])))).catch(() => {});
   }, []);
 
   const wordsLive = mode === "words" && liveWords.top.length > 0;
@@ -117,7 +130,7 @@ export default function Recognize({ go }) {
         {loading && <p className="note">Extracting landmarks…</p>}
         {err && <p className="error">{err}</p>}
         {!matches?.length && !loading && !err && <p className="muted">Matches and confidence appear here.</p>}
-        <Matches matches={matches} rejectThreshold={threshold} onLearn={learn} letterIds={letterIds} />
+        <Matches matches={matches} rejectThreshold={threshold} onLearn={learn} media={media} />
         {mode !== "upload" && server?.matches?.[0] && (
           <p className="muted small">Last auto-captured: <b>{server.matches[0].label}</b> ({Math.round(server.matches[0].confidence * 100)}%, server check)</p>
         )}

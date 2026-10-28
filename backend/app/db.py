@@ -74,6 +74,21 @@ class ReferenceVideo(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class ReferenceImage(Base):
+    """A real photo of the handshape (letters that have no video), copied from a dataset whose license allows it."""
+    __tablename__ = "reference_images"
+    id = Column(Integer, primary_key=True)
+    sign_id = Column(Integer, ForeignKey("signs.id", ondelete="CASCADE"), unique=True, nullable=False)
+    clip_id = Column(Integer, ForeignKey("reference_clips.id", ondelete="SET NULL"))
+    path = Column(String, nullable=False)                 # relative to media_dir
+    width = Column(Integer)
+    height = Column(Integer)
+    license = Column(String)
+    attribution = Column(String)
+    source_url = Column(String)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class Learner(Base):
     __tablename__ = "learners"
     id = Column(String, primary_key=True)                 # anonymous id from the browser
@@ -136,6 +151,7 @@ def check_connection():
                 "categories": cats,
                 "reference_clips": clips,
                 "reference_videos": s.query(ReferenceVideo).count(),
+                "reference_images": s.query(ReferenceImage).count(),
                 "attempts_count": s.query(Attempt).count(),
             }
     except Exception as e:  # noqa: BLE001 - status must never raise

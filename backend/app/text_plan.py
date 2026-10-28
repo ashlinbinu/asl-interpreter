@@ -13,10 +13,16 @@ DROP = {"a", "an", "the", "am", "is", "are", "was", "were", "be", "been", "being
 NOTE = "Word-by-word glossing, not ASL grammar; real ASL word order and facial grammar differ."
 
 
+def _media(e: SignEntry) -> dict:
+    """Video if there is one, else a real photo; attribution and license belong to whichever is shown."""
+    v, im = e.video or {}, e.image or {}
+    shown = v or im
+    return {"video_url": v.get("url"), "image_url": im.get("url"), "attribution": shown.get("attribution"),
+            "license": shown.get("license")}
+
+
 def _entry(word: str, e: SignEntry) -> dict:
-    v = e.video or {}
-    return {"word": word, "gloss": e.gloss, "sign_id": e.id, "label": e.label, "kind": e.kind,
-            "video_url": v.get("url"), "attribution": v.get("attribution"), "license": v.get("license"),
+    return {"word": word, "gloss": e.gloss, "sign_id": e.id, "label": e.label, "kind": e.kind, **_media(e),
             "fingerspelled": False, "letters": []}
 
 
@@ -82,13 +88,12 @@ def plan(text: str, reg: Registry, normalize: bool = False) -> dict:
             for ch in word:
                 e = reg.letter(ch)
                 if e:
-                    letters.append({"letter": ch.upper(), "sign_id": e.id,
-                                    "video_url": e.video["url"] if e.video else None})
+                    letters.append({"letter": ch.upper(), "sign_id": e.id, "kind": e.kind, **_media(e)})
                 elif ch.isalnum():
                     missing.append(ch)
             if letters:
                 entries.append({"word": word, "gloss": "fs-" + word.upper(), "sign_id": None, "label": word,
-                                "kind": "fingerspelling", "video_url": None, "fingerspelled": True,
+                                "kind": "fingerspelling", "video_url": None, "image_url": None, "fingerspelled": True,
                                 "letters": letters})
             else:
                 missing.append(word)

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import func
 
 from .content import DYNAMIC_LETTERS, LETTERS
-from .db import ReferenceClip, ReferenceVideo, Session, Sign
+from .db import ReferenceClip, ReferenceImage, ReferenceVideo, Session, Sign
 
 
 def norm(text: str) -> str:
@@ -22,6 +22,7 @@ class SignEntry:
     kind: str
     description: str | None
     video: dict | None = None            # {url, license, attribution, source_url}
+    image: dict | None = None            # same shape: a real photo of the handshape
     clip_count: int = 0
     canonical_clip_id: int | None = None
     legacy_frames: list | None = field(default=None, repr=False)
@@ -33,6 +34,9 @@ class SignEntry:
              "has_video": self.video is not None, "reference_video_url": self.video["url"] if self.video else None,
              "license": self.video.get("license") if self.video else None,
              "attribution": self.video.get("attribution") if self.video else None,
+             "has_image": self.image is not None, "reference_image_url": self.image["url"] if self.image else None,
+             "image_license": self.image.get("license") if self.image else None,
+             "image_attribution": self.image.get("attribution") if self.image else None,
              "reference_clips": self.clip_count}
         if with_frames and settings is not None and settings.dev_synthetic and self.legacy_frames:
             d["frames"] = self.legacy_frames
@@ -52,13 +56,14 @@ class Registry:
                                .group_by(ReferenceClip.sign_id).all())
             canon = dict(s.query(ReferenceClip.sign_id, ReferenceClip.id).filter(ReferenceClip.is_canonical.is_(True)))
             videos = {v.sign_id: v for v in s.query(ReferenceVideo)}
+            images = {v.sign_id: v for v in s.query(ReferenceImage)}
+            media = lambda v: {"url": f"/media/{v.path}", "license": v.license,  # noqa: E731
+                               "attribution": v.attribution, "source_url": v.source_url} if v else None
             for r in s.query(Sign).order_by(Sign.id):
-                v = videos.get(r.id)
                 e = SignEntry(
                     id=r.id, label=r.label, gloss=r.gloss or r.label.upper(), category=r.category or "word",
                     kind=r.kind or "dynamic", description=r.description,
-                    video={"url": f"/media/{v.path}", "license": v.license, "attribution": v.attribution,
-                           "source_url": v.source_url} if v else None,
+                    video=media(videos.get(r.id)), image=media(images.get(r.id)),
                     clip_count=clip_counts.get(r.id, 0), canonical_clip_id=canon.get(r.id),
                     legacy_frames=r.frames if dev_synthetic else None, frames_source=r.frames_source,
                 )

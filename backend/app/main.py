@@ -153,6 +153,11 @@ def _save_attempt(learner_id, sign_id, score, components, hints, mode, model_ver
         logger.warning("Could not save attempt: %s", e)
 
 
+def _media_urls(e) -> dict:
+    return {"reference_video_url": e.video["url"] if e and e.video else None,
+            "reference_image_url": e.image["url"] if e and e.image else None}
+
+
 def _decode_image(data: str):
     import cv2
     if "," in data[:100]:
@@ -275,7 +280,7 @@ def recognize(body: RecognizeIn):
         label = model.classes[i]
         e = registry.letter(label)
         matches.append({"label": label, "confidence": round(float(p[i]), 4), "sign_id": e.id if e else None,
-                        "reference_video_url": e.video["url"] if e and e.video else None})
+                        **_media_urls(e)})
     return {"matches": matches, "rejected": bool(p.max() < model.reject_threshold), "method": "alphabet_static",
             "model_version": model.version, "frames_used": used}
 
@@ -293,7 +298,7 @@ def _recognize_word(frames, body):
     for i in np.argsort(-p)[:body.top_k]:
         e = registry.by_label.get(norm(wm.classes[i]))
         matches.append({"label": wm.classes[i], "confidence": round(float(p[i]), 4), "sign_id": e.id if e else None,
-                        "reference_video_url": e.video["url"] if e and e.video else None})
+                        **_media_urls(e)})
     return {"matches": matches, "rejected": bool(p.max() < wm.reject_threshold), "method": f"words_{wm.net.kind}",
             "model_version": wm.version, "frames_used": _hand_frames(frames)}
 
