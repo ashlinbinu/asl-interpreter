@@ -16,8 +16,7 @@ export default function Progress({ go }) {
   return (
     <section>
       <h2>Progress</h2>
-      <p className="muted">This browser's practice history (anonymous learner id, stored on this computer's backend).
-        Mastered = {p.mastery_rule}. {p.review_rule}.</p>
+      <p className="muted">Your practice history on this device, saved without an account. A sign is mastered once you score 80 or more in 3 of your last 4 tries. Signs you find tricky come back sooner, and ones you know well come back less often.</p>
       <div className="stats" role="group" aria-label="Summary">
         <div><b>{p.signs.length}</b><span>signs practised</span></div>
         <div><b>{mastered}</b><span>mastered</span></div>

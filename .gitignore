@@ -3,6 +3,8 @@ dist
 __pycache__
 *.db
 .env
+.env.local
+.env.*.local
 .venv/
 .pytest_cache/
 *.part

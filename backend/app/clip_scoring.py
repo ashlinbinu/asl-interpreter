@@ -14,9 +14,9 @@ Either way the score is UNVERIFIED for your own signs: it was measured on ASL Ci
 import numpy as np
 
 from . import features as fx
-from .clipstore import load_clip
-from .config import get_settings
+from .clipstore import read_clip
 from .db import ReferenceClip, Session
+from .storage import get_storage
 from .word_model import COMPONENTS, WEAK, component_distances, dtw_path, highlight_from, hints_for, joints_to_highlight
 
 MAX_REFS = 10
@@ -69,12 +69,12 @@ class ClipScorer:
     def references(self, sign_id, left_handed=False):
         key = (sign_id, bool(left_handed))
         if key not in self._refs:
-            store, refs = get_settings().store_dir, []
+            store, refs = get_storage(), []
             for c in self._clips(sign_id):
-                path = store / c.landmarks_path
-                if not path.is_file():
+                try:
+                    frames, _ = read_clip(store, c.landmarks_path)
+                except FileNotFoundError:
                     continue
-                frames, _ = load_clip(path)
                 # Custom signs were recorded by this learner, so they share the learner's handedness setting.
                 lh = left_handed if c.source == "user" else bool((c.quality or {}).get("left_handed"))
                 seq = fx.to_sequence(frames, lh)
@@ -117,11 +117,13 @@ class ClipScorer:
     def letter_highlight(self, frames, sign_id, left_handed=False):
         """Joints of the attempt's hand that differ most from the letter's reference photo (canonical clip)."""
         if sign_id not in self._static:
-            vec, store = None, get_settings().store_dir
-            clips = self._clips(sign_id, limit=1)
-            if clips and (store / clips[0].landmarks_path).is_file():
-                v, _ = fx.static_vectors(load_clip(store / clips[0].landmarks_path)[0],
-                                         bool((clips[0].quality or {}).get("left_handed")))
+            vec, clips = None, self._clips(sign_id, limit=1)
+            try:
+                frames = read_clip(get_storage(), clips[0].landmarks_path)[0] if clips else None
+            except FileNotFoundError:
+                frames = None
+            if frames is not None:
+                v, _ = fx.static_vectors(frames, bool((clips[0].quality or {}).get("left_handed")))
                 vec = v.mean(0) if len(v) else None
             self._static[sign_id] = vec
         ref = self._static[sign_id]

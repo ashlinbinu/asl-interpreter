@@ -1,0 +1,13 @@
+# Only the API runtime goes into the image (backend/Dockerfile). Never the local database (learners, attempts), .env
+# (local paths, credentials) or the data store (dataset media and recordings, docs/DEPLOYMENT.md §5).
+.venv/
+**/__pycache__/
+.pytest_cache/
+*.db
+.env
+.env.*
+data/
+tests/
+scripts/
+Dockerfile
+.dockerignore

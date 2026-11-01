@@ -36,6 +36,8 @@ class Settings:
     max_body_bytes: int
     max_upload_bytes: int
     dev_synthetic: bool      # allow legacy synthetic templates as a dev-only fallback
+    storage: str             # where store files live: "local" (store_dir) or "s3" (a bucket, e.g. Cloudflare R2)
+    s3: dict                 # bucket, endpoint, region, access_key_id, secret_access_key (storage "s3")
 
     @property
     def media_dir(self) -> Path:
@@ -63,4 +65,7 @@ def get_settings() -> Settings:
         max_body_bytes=int(os.getenv("HANDSPEAK_MAX_BODY_BYTES", str(8 * 1024 * 1024))),
         max_upload_bytes=int(os.getenv("HANDSPEAK_MAX_UPLOAD_BYTES", str(60 * 1024 * 1024))),
         dev_synthetic=os.getenv("HANDSPEAK_DEV_SYNTHETIC", "0").strip().lower() in ("1", "true", "yes"),
+        storage=os.getenv("HANDSPEAK_STORAGE", "").strip().lower() or "local",
+        s3={k: os.getenv(f"HANDSPEAK_S3_{k.upper()}", "").strip() or None
+            for k in ("bucket", "endpoint", "region", "access_key_id", "secret_access_key")},
     )

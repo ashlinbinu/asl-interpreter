@@ -1,0 +1,4 @@
+# Hosted backend (backend/Dockerfile, docs/DEPLOYMENT.md): the runtime plus S3-compatible storage. No PyTorch and no
+# onnxruntime: the word network runs in numpy (app/word_model.py) and the alphabet model in scikit-learn.
+-r requirements.txt
+boto3>=1.36,<2         # HANDSPEAK_STORAGE=s3 (Cloudflare R2); also needed locally to run scripts.publish_store

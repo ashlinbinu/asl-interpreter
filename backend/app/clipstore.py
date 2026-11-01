@@ -1,7 +1,9 @@
 """Per-clip landmark storage: RawFrames (FEATURE_SPEC §1) <-> compressed NPZ.
 
 Hands are stored in detection order (not canonical slots) so features can be recomputed under any spec version.
+The API reads and writes clips through app.storage (read_clip / write_clip); ingest scripts write files (save_clip).
 """
+import io
 import json
 from pathlib import Path
 
@@ -14,6 +16,28 @@ _LABELS_INV = {0: None, 1: "Left", 2: "Right"}
 
 
 def save_clip(path: Path, frames: list, meta: dict) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, **_arrays(frames, meta))
+    return path
+
+
+def clip_bytes(frames: list, meta: dict) -> bytes:
+    buf = io.BytesIO()
+    np.savez_compressed(buf, **_arrays(frames, meta))
+    return buf.getvalue()
+
+
+def write_clip(storage, key: str, frames: list, meta: dict):
+    storage.write(key, clip_bytes(frames, meta))
+
+
+def read_clip(storage, key: str):
+    """-> (frames, meta); FileNotFoundError if the clip isn't in storage."""
+    return load_clip(io.BytesIO(storage.read(key)))
+
+
+def _arrays(frames: list, meta: dict) -> dict:
     n = len(frames)
     hands = np.zeros((n, 2, 21, 3), np.float32)
     present = np.zeros((n, 2), bool)
@@ -37,16 +61,12 @@ def save_clip(path: Path, frames: list, meta: dict) -> Path:
             if p.shape[1] < 4:
                 pose[i, :, 3] = 1.0
             pose_present[i] = True
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(path, hands=hands, hand_present=present, handedness=label, hand_score=score,
-                        pose=pose, pose_present=pose_present, t_ms=t_ms, size=np.array([w, h], np.int32),
-                        meta=np.array(json.dumps(meta)))
-    return path
+    return dict(hands=hands, hand_present=present, handedness=label, hand_score=score, pose=pose,
+                pose_present=pose_present, t_ms=t_ms, size=np.array([w, h], np.int32), meta=np.array(json.dumps(meta)))
 
 
-def load_clip(path: Path):
-    """-> (frames, meta)"""
+def load_clip(path):
+    """path or binary file object -> (frames, meta)"""
     d = np.load(path, allow_pickle=False)
     w, h = (int(v) for v in d["size"])
     frames = []

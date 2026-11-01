@@ -43,8 +43,6 @@ export default function Recognize({ go }) {
   const liveWords = useLiveWords(mode === "words");
   const [server, setServer] = useState(null);
   const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [preview, setPreview] = useState(null);
   const [focus, setFocus] = useState(null);
   const [media, setMedia] = useState({});   // lower-case label -> sign (id + reference video/photo urls)
 
@@ -67,58 +65,28 @@ export default function Recognize({ go }) {
     } catch (e) { setErr(e.message); }
   };
 
-  const onFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setErr(""); setLoading(true);
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      setPreview(ev.target.result);
-      try {
-        setServer(await api.recognize({ image: ev.target.result, mode: "alphabet" }));
-      } catch (er) { setErr(er.message); setServer(null); } finally { setLoading(false); }
-    };
-    reader.readAsDataURL(file);
-  };
-
   return (
     <section className="two">
       <div>
         <h2>Sign → text</h2>
         <div className="subnav" role="tablist">
-          {[["live", "Letters (live)"], ["words", "Words (live)"], ["upload", "Image upload"]].map(([id, name]) => (
+          {[["live", "Letters (live)"], ["words", "Words (live)"]].map(([id, name]) => (
             <button key={id} role="tab" aria-selected={mode === id} className={mode === id ? "on" : ""}
                     onClick={() => switchMode(id)}>{name}</button>
           ))}
         </div>
-        {mode === "words" ? (
-          <p className="banner">Sign one of the {liveWords.model?.classes.length ?? ""} vocabulary words, then pause. The clip is matched by a model trained on
-            ASL Citizen signers; its held-out-signer accuracy is in the header badge. J and Z aren't recognised yet.</p>
-        ) : (
-          <p className="banner">Static fingerspelling letters are recognised in the browser. Moving letters (J, Z) need
-            motion data that isn't available yet.</p>
-        )}
         {mode === "live" ? (
           <>
             {live.error && <p className="error">{live.error}. Train it first: see README "Train the alphabet model".</p>}
             <Camera mode="auto" kind="static" onFrame={live.onFrame} onSegment={onSegment} />
             {live.ready && <p className="muted small">In-browser model {live.model.version} · {live.latencyMs.toFixed(1)} ms per update</p>}
           </>
-        ) : mode === "words" ? (
+        ) : (
           <>
             {liveWords.error && <p className="error">{liveWords.error}. Train it first: python -m scripts.train_words</p>}
             <Camera key="words" mode="auto" kind="dynamic" onFrame={liveWords.onFrame} onSegment={onSegment} />
             {liveWords.ready && <p className="muted small">In-browser word model {liveWords.model.version} · {liveWords.latencyMs.toFixed(0)} ms per update</p>}
           </>
-        ) : (
-          <div>
-            <label className="dropzone">
-              <input type="file" accept="image/*" onChange={onFile} className="sr-only" />
-              <p><strong>Choose a photo of a fingerspelled letter</strong></p>
-              <span className="muted small">Landmarks are extracted on the server, then the same landmark model is used.</span>
-            </label>
-            {preview && <img src={preview} alt="Uploaded sign" className="preview" />}
-          </div>
         )}
       </div>
 
@@ -127,11 +95,10 @@ export default function Recognize({ go }) {
           <h2>Top matches</h2>
           {matches?.[0] && <button className="speak-btn" onClick={() => speak(matches[0].label)}>🔊 Speak "{matches[0].label}"</button>}
         </div>
-        {loading && <p className="note">Extracting landmarks…</p>}
         {err && <p className="error">{err}</p>}
-        {!matches?.length && !loading && !err && <p className="muted">Matches and confidence appear here.</p>}
+        {!matches?.length && !err && <p className="muted">Matches and confidence appear here.</p>}
         <Matches matches={matches} rejectThreshold={threshold} onLearn={learn} media={media} />
-        {mode !== "upload" && server?.matches?.[0] && (
+        {server?.matches?.[0] && (
           <p className="muted small">Last auto-captured: <b>{server.matches[0].label}</b> ({Math.round(server.matches[0].confidence * 100)}%, server check)</p>
         )}
         {focus?.id && (

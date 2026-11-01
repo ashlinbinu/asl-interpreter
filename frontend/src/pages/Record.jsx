@@ -24,7 +24,7 @@ export default function Record() {
   const cam = useRef();
   const [signer, setSigner] = useState(() => { try { return localStorage.getItem(SIGNER_KEY) || ""; } catch { return ""; } });
   const [vocab, setVocab] = useState([]);
-  const [chosen, setChosen] = useState(LETTERS);
+  const [chosen, setChosen] = useState([]);   // CHANGED: was useState(LETTERS), so no letters start selected
   const [reps, setReps] = useState(5);
   const [counts, setCounts] = useState({});
   const [queue, setQueue] = useState([]);
@@ -110,6 +110,12 @@ export default function Record() {
             <label>Repetitions per sign <input type="number" min={1} max={30} value={reps} onChange={(e) => setReps(+e.target.value || 1)} /></label>
             <p className="muted small">Letters: hold each static letter still for 1.5 s. J and Z are motion letters
               (3 s take: draw the whole movement).</p>
+            {/* ADDED: select all / clear letters */}
+            <p className="muted small">
+              <button className="link" onClick={() => setChosen((c) => [...new Set([...c, ...LETTERS])])}>Select all letters</button>
+              {" · "}
+              <button className="link" onClick={() => setChosen((c) => c.filter((x) => !LETTERS.includes(x)))}>Clear letters</button>
+            </p>
             <div className="list">
               {LETTERS.map((L) => (
                 <button key={L} className={`chip letter ${chosen.includes(L) ? "on" : ""}`} onClick={() => toggle(L)}

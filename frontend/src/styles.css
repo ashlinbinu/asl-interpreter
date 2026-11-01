@@ -51,8 +51,18 @@ figure { margin:0; } figcaption { margin-top:.4rem; font-weight:600; color:var(-
 .subnav { display:flex; gap:0.5rem; margin-bottom:1rem; border-bottom:1px solid var(--line); padding-bottom:0.6rem; }
 .subnav button { background:none; border:0; color:var(--muted); font:600 0.9rem Figtree, sans-serif; cursor:pointer; padding:0.3rem 0.6rem; border-radius:4px; }
 .subnav button.on { color:var(--neon); background:#1c1c14; }
-.dropzone { border:2px dashed var(--line); border-radius:12px; padding:2rem 1.5rem; text-align:center; cursor:pointer; background:var(--panel); transition:border-color .2s; margin-top:1rem; }
-.dropzone:hover { border-color:var(--neon); }
+.dropzone {
+    background-color: #000000 !important;
+    border: none !important; 
+}
+
+/* Hide the main message text and muted subtext completely */
+.dropzone .dz-message,
+.dropzone .dz-message .dz-button,
+.dropzone .text-muted,
+.dropzone .muted {
+    display: none !important;
+}
 .speak-btn { background:#1b1b14; border:1px solid var(--neon); color:var(--neon); padding:0.35rem 0.75rem; border-radius:6px; cursor:pointer; font:600 0.85rem Figtree, sans-serif; display:inline-flex; align-items:center; gap:0.3rem; margin-left:auto; }
 .speak-btn:hover { background:var(--neon); color:#000; }
 .streak-box { display:flex; gap:1.5rem; align-items:center; margin-bottom:1rem; background:var(--panel); padding:0.75rem 1rem; border-radius:8px; border:1px solid var(--line); }

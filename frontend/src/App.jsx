@@ -5,7 +5,7 @@ import Practice from "./pages/Practice.jsx";
 import Record from "./pages/Record.jsx";
 import Library from "./pages/Library.jsx";
 import Progress from "./pages/Progress.jsx";
-import { api } from "./api.js";
+import { api, REMOTE_BACKEND } from "./api.js";
 import { learner, updateLearner } from "./lib/identity.js";
 
 const TABS = [
@@ -18,7 +18,6 @@ const TABS = [
 ];
 
 const HELD_OUT = ["signer_holdout", "official_signer_split"];
-const API_VERSION = 7;   // must match backend/app/main.py: an older backend lacks endpoints this page uses
 
 function ModelBadge({ m, name }) {
   if (!m?.ready) return <span className="badge" title={m?.error || ""}>{name} model: not trained</span>;
@@ -70,13 +69,12 @@ export default function App() {
       <header>
         <div className="brand-group">
           <h1>Sign-<span>ify</span></h1>
-          <div className="status-pill-group">
-            {up
-              ? <span className="badge ok">● {status.database.signs_count} signs</span>
-              : <span className="badge err">{status ? "○ Backend unavailable" : "○ Connecting…"}</span>}
-            {status?.models && <ModelBadge m={status.models.alphabet} name="Alphabet" />}
-            {status?.models && <ModelBadge m={status.models.words} name="Words" />}
-          </div>
+          {!up && (
+            <div className="status-pill-group">
+              <span className="badge err">{REMOTE_BACKEND ? "○ Waking up the server…"
+                : status ? "○ Backend unavailable" : "○ Connecting…"}</span>
+            </div>
+          )}
         </div>
         <nav aria-label="Sections">
           {TABS.map(([id, name]) => (
@@ -92,13 +90,18 @@ export default function App() {
         </div>
       </header>
       <main id="main">
-        {epoch > 0 && !up && <p className="banner" role="alert">Lost the connection to the backend: retrying…</p>}
-        {up && status.api_version !== API_VERSION && (
-          <p className="error" role="alert">The backend is running older code than this page (it was started before the
-            last update), so videos, scoring or delete may not work. Close the "ASL Backend" and "ASL Frontend" windows
-            and run <code>run_all.bat</code> again.</p>
-        )}
-        {epoch === 0 ? (
+        {epoch > 0 && !up && <p className="banner" role="alert">{REMOTE_BACKEND
+          ? "Lost the connection to the server: it may have gone to sleep. Waking it up…"
+          : "Lost the connection to the backend: retrying…"}</p>}
+        {epoch === 0 && REMOTE_BACKEND ? (
+          <section className="card" role="status">
+            <h2>Waking up the server…</h2>
+            <p>Sign-ify runs on a free server that sleeps when nobody has used it for a while. Waking it usually takes
+              about a minute; the app opens by itself as soon as it answers.</p>
+            {status && <p className="muted small">Still waking up. If this takes more than a few minutes, the server
+              may be down: try again later.</p>}
+          </section>
+        ) : epoch === 0 ? (
           <section className="card" role="status">
             <h2>{status ? "Waiting for the backend…" : "Connecting…"}</h2>
             <p>Retrying every 2 seconds; the app opens by itself when the backend answers.</p>

@@ -11,7 +11,7 @@ from typing import Optional
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import func
@@ -19,9 +19,7 @@ from sqlalchemy import func
 from . import features as fx
 from . import mediapipe_models
 from .clip_scoring import NoUsableReference, clip_scorer
-from .clipstore import load_clip, quality, save_clip
-from .motion_letters import TIPS as MOTION_TIPS
-from .motion_letters import NoMotionReference, motion_scorer
+from .clipstore import quality, read_clip, write_clip
 from .config import get_settings
 from .content import letter_hint
 from .db import (Attempt, Learner, ReferenceClip, ReferenceImage, ReferenceVideo, Session, Sign, check_connection,
@@ -30,11 +28,12 @@ from .recognition import NoHandError, models
 from .registry import ensure_alphabet, norm, registry
 from .schemas import (AttemptIn, Frames, RecognizeIn, RecognizeOut, ScoreIn, ScoreOut, SignIn, TextIn,
                       frames_to_dicts)
+from .storage import get_storage, media_key
 from .text_plan import plan
 
 logger = logging.getLogger("asl.api")
 settings = get_settings()
-API_VERSION = 7                      # bump when the frontend needs new endpoints; the page checks it
+storage = get_storage()            # landmarks, recordings and media: store dir (default) or an S3 bucket
 MASTERY_SCORE, MASTERY_OF_LAST = 80.0, (3, 4)
 REVIEW_DAYS = (0, 1, 2, 4, 7)      # Leitner box -> days until the sign is due again
 
@@ -44,7 +43,8 @@ def startup():
     ensure_alphabet()
     registry.load(settings.dev_synthetic)
     models.load()
-    settings.media_dir.mkdir(parents=True, exist_ok=True)
+    if storage.kind == "local":
+        settings.media_dir.mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
@@ -108,7 +108,16 @@ class BodyLimit:
 app.add_middleware(BodyLimit, default=settings.max_body_bytes, upload=settings.max_upload_bytes)
 app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins), allow_methods=["GET", "POST", "DELETE"],
                    allow_headers=["Content-Type"])
-app.mount("/media", StaticFiles(directory=settings.media_dir, check_dir=False), name="media")
+if storage.kind == "local":
+    app.mount("/media", StaticFiles(directory=settings.media_dir, check_dir=False), name="media")
+else:
+    @app.get("/media/{path:path}", include_in_schema=False)
+    def media(path: str):
+        """Reference media from the bucket, which stays private: a redirect to a short-lived signed URL."""
+        try:
+            return RedirectResponse(storage.url(media_key(path)), 307)
+        except ValueError:
+            raise HTTPException(404, "Not found.") from None
 
 
 # ---------------------------------------------------------------- helpers
@@ -199,7 +208,6 @@ def _decode_image(data: str):
 def health():
     return {
         "ok": True,
-        "api_version": API_VERSION,
         "database": check_connection(),
         "models": models.status(),
         "feature_spec": fx.SPEC_VERSION,
@@ -231,10 +239,10 @@ def _reference_landmarks(e, max_frames=120):
             clip = s.query(ReferenceClip).filter(ReferenceClip.sign_id == e.id).order_by(ReferenceClip.id).first()
     if clip is None:
         return None
-    path = settings.store_dir / clip.landmarks_path
-    if not path.exists():
+    try:
+        frames, _ = read_clip(storage, clip.landmarks_path)
+    except FileNotFoundError:
         return None
-    frames, _ = load_clip(path)
     step = max(1, len(frames) // max_frames + (len(frames) % max_frames > 0))
     return {"frames": frames[::step], "source": clip.source, "signer_id": clip.signer_id,
             "license": clip.license, "attribution": clip.attribution, "clip_id": clip.id}
@@ -261,7 +269,7 @@ def add_sign(body: SignIn):
         s.add(row)
         s.flush()
         rel = f"landmarks/user/{signer}/{_slug(body.label)}_{row.id}_{int(time.time())}.npz"
-        save_clip(settings.store_dir / rel, frames, {"label": body.label, "source": "user", "signer_id": signer})
+        write_clip(storage, rel, frames, {"label": body.label, "source": "user", "signer_id": signer})
         s.add(ReferenceClip(sign_id=row.id, source="user", signer_id=signer, landmarks_path=rel,
                             num_frames=len(frames), quality=quality(frames), license="user-contributed (local)",
                             is_canonical=True))
@@ -271,18 +279,6 @@ def add_sign(body: SignIn):
     clip_scorer.invalidate(sign_id)
     registry.load(settings.dev_synthetic)
     return registry.by_id[sign_id].public()
-
-
-def _remove_file(root, rel) -> bool:
-    """Delete root/rel if it is a file inside root (never follows a path out of the store)."""
-    if not rel:
-        return False
-    base = root.resolve()
-    p = (root / rel).resolve()
-    if not p.is_relative_to(base) or not p.is_file():
-        return False
-    p.unlink()
-    return True
 
 
 @app.delete("/api/signs/{sign_id}")
@@ -305,8 +301,7 @@ def delete_sign(sign_id: int):
             s.query(model).filter(model.sign_id == sign_id).delete(synchronize_session=False)
         s.delete(row)
         s.commit()
-    removed = sum(_remove_file(settings.store_dir, p) for p in store) + \
-        sum(_remove_file(settings.media_dir, p) for p in media)
+    removed = sum(storage.delete(p) for p in store) + sum(storage.delete(media_key(p)) for p in media)
     clip_scorer.invalidate(sign_id)
     registry.load(settings.dev_synthetic)
     return {"deleted": sign_id, "label": label, "clips_removed": len(clips), "files_removed": removed,
@@ -335,14 +330,13 @@ async def record_sign(sign_id: int, landmarks: UploadFile = File(...), video: Op
     signer = learner if re.fullmatch(r"[A-Za-z0-9_-]{6,64}", learner) else "anonymous"
     stamp = f"{_slug(label)}_{sign_id}_{int(time.time() * 1000)}"
     rel_lm = f"landmarks/user/{signer}/{stamp}.npz"
-    save_clip(settings.store_dir / rel_lm, frames, {"label": label, "source": "user", "signer_id": signer,
-                                                    "left_handed": bool(m.get("left_handed"))})
+    write_clip(storage, rel_lm, frames, {"label": label, "source": "user", "signer_id": signer,
+                                         "left_handed": bool(m.get("left_handed"))})
     rel_video, data = None, await video.read() if video is not None else b""
     if data:
         ext = ".mp4" if "mp4" in (video.content_type or "") else ".webm"
         rel_video = f"recordings/user/{signer}/{stamp}{ext}"
-        (settings.store_dir / rel_video).parent.mkdir(parents=True, exist_ok=True)
-        (settings.store_dir / rel_video).write_bytes(data)
+        storage.write(rel_video, data)
     ts = [f["t"] for f in frames]
     with Session() as s:
         old = s.query(ReferenceClip).filter(ReferenceClip.sign_id == sign_id, ReferenceClip.source == "user").all()
@@ -366,16 +360,15 @@ async def record_sign(sign_id: int, landmarks: UploadFile = File(...), video: Op
                 ref = ReferenceVideo(sign_id=sign_id)
                 s.add(ref)
             ref.path = f"videos/{sign_id}/user_{clip.id}{Path(rel_video).suffix}"
-            (settings.media_dir / ref.path).parent.mkdir(parents=True, exist_ok=True)
-            (settings.media_dir / ref.path).write_bytes(data)
+            storage.write(media_key(ref.path), data)
             ref.clip_id, ref.duration_ms = clip.id, max(ts) - min(ts)
             ref.license, ref.attribution, ref.source_url = "your own recording (local)", "Your recording", None
         _touch_learner(s, learner if signer != "anonymous" else None)
         s.commit()
     for p in old_files:
-        _remove_file(settings.store_dir, p)
+        storage.delete(p)
     for p in old_media:
-        _remove_file(settings.media_dir, p)
+        storage.delete(media_key(p))
     clip_scorer.invalidate(sign_id)
     registry.load(settings.dev_synthetic)
     return registry.by_id[sign_id].public()
@@ -487,24 +480,12 @@ def score(body: ScoreIn):
         out = {"score": pct, "components": {}, "hints": ["DEV ONLY: compared against a synthetic template."],
                "feedback": _feedback(pct), "predicted": None, "sign_label": e.label,
                "method": "legacy_synthetic_dtw", "model_version": None}
-    elif e.category == "alphabet" and e.label.upper() in MOTION_TIPS:
-        # J and Z: handshape + fingertip path against the reference video (app/motion_letters.py).
-        try:
-            r = motion_scorer.score(frames, e.label, body.left_handed)
-        except NoHandError as err:
-            raise HTTPException(422, str(err)) from err
-        except NoMotionReference:
-            raise HTTPException(409, f"'{e.label}' can't be scored yet: it needs the letter reference videos. Run "
-                                     "python -m scripts.datasets.ingest_commons_alphabet, then restart the API.") from None
-        out = {"score": r["score"], "components": r["components"], "hints": r["hints"],
-               "feedback": _feedback(r["score"]), "highlight": r["highlight"], "predicted": None,
-               "sign_label": e.label, "method": "motion_letter_handshape_path (vs one reference signer; unverified)",
-               "model_version": None}
     elif e.category == "alphabet":
         # Comparing with a recording can't tell letters apart (a different letter by the same signer scores a median
-        # of ~94 against a letter's reference), so other letters are only scored by the alphabet model.
-        raise HTTPException(503, f"'{e.label}' can't be scored: the alphabet model is not trained yet "
-                                 "(python -m scripts.train_alphabet).")
+        # of ~94 against a letter's reference), so letters without a trained model (J, Z) are not scored.
+        raise HTTPException(409, f"'{e.label}' isn't scored yet: it needs a model trained on several signers' "
+                                 "motion, and comparing with one recording can't tell letters apart. Watch the "
+                                 "reference video and copy it.")
     else:
         # No trained model covers this sign (custom signs): DTW against its own clips.
         try:
@@ -570,15 +551,13 @@ async def add_recording(meta: str = Form(...), landmarks: UploadFile = File(...)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     base = f"own/{signer}/{_slug(e.label)}/{stamp}_{int(time.time() * 1000) % 1000:03d}"
     rel_lm = f"landmarks/{base}.npz"
-    save_clip(settings.store_dir / rel_lm, frames, {"label": e.label, "source": "own", "signer_id": signer,
-                                                    "left_handed": bool(m.get("left_handed")), "rep": m.get("rep")})
+    write_clip(storage, rel_lm, frames, {"label": e.label, "source": "own", "signer_id": signer,
+                                         "left_handed": bool(m.get("left_handed")), "rep": m.get("rep")})
     rel_video = None
     if video is not None:
         ext = ".mp4" if "mp4" in (video.content_type or "") else ".webm"
         rel_video = f"recordings/{base}{ext}"
-        dst = settings.store_dir / rel_video
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        dst.write_bytes(await video.read())
+        storage.write(rel_video, await video.read())
     ts = [f["t"] for f in frames]
     with Session() as s:
         clip = ReferenceClip(sign_id=e.id, source="own", signer_id=signer, landmarks_path=rel_lm, video_path=rel_video,
